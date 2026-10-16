@@ -57,6 +57,27 @@ test('switching in Stand Your Ground requires an explicit alternate answer', () 
   dom.window.close();
 });
 
+test('question event makes the question panel visibly render', () => {
+  const dom = new JSDOM(gameHtml, {
+    runScripts: 'outside-only',
+    url: 'http://127.0.0.1/game.html'
+  });
+  const handlers = {};
+  dom.window.io = () => ({ emit() {}, on(event, fn) { handlers[event] = fn; } });
+  dom.window.eval(inlineScripts.join('\n'));
+
+  handlers.question({
+    index: 0,
+    category: 'Science',
+    text: 'Visible question?',
+    options: { A: 'Yes', B: 'No', C: 'Maybe', D: 'Never' },
+    timerOff: true
+  });
+
+  assert.notEqual(dom.window.getComputedStyle(dom.window.document.getElementById('question')).display, 'none');
+  dom.window.close();
+});
+
 test('final reveal does not reopen Stand Your Ground', () => {
   const dom = new JSDOM(gameHtml, {
     runScripts: 'outside-only',
