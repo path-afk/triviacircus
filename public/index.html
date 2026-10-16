@@ -1,196 +1,77 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Trivia Circus — Come for one question.</title>
-<meta name="description" content="Real-time multiplayer trivia. No hostility. Just questions, the room's verdict, and your chance to prove everybody wrong.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trivia Circus — The Show Never Stops</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
-:root {
-  --navy:   #0f1c2e;
-  --navy2:  #162840;
-  --navy3:  #1e3a57;
-  --ivory:  #faf6f0;
-  --coral:  #ff5252;
-  --coral2: #e04444;
-  --teal:   #00c9a7;
-  --amber:  #ffb347;
-  --white:  #f0f4f8;
-  --dim:    #7a9bb5;
-  --card-shadow: 0 24px 64px rgba(0,0,0,.45);
-}
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--navy);color:var(--white);font-family:Inter,sans-serif;min-height:100vh;overflow-x:hidden}
-@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-
-/* NAV */
-nav{display:flex;align-items:center;justify-content:space-between;padding:1.25rem 2rem;position:sticky;top:0;background:rgba(15,28,46,.92);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.06);z-index:50}
-.logo{font-size:1.3rem;font-weight:900;color:var(--coral);letter-spacing:-0.5px}
-.logo em{color:var(--white);font-style:normal}
-.a11y-toggle{display:flex;gap:.5rem;align-items:center}
-.a11y-toggle button{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:var(--dim);font-size:.75rem;padding:.35rem .75rem;border-radius:6px;cursor:pointer;font-family:Inter,sans-serif;transition:all .2s}
-.a11y-toggle button:hover,.a11y-toggle button.on{background:rgba(255,83,82,.15);border-color:var(--coral);color:var(--coral)}
-.a11y-toggle button:focus-visible{outline:2px solid var(--coral);outline-offset:2px}
-
-/* HERO */
-.hero{text-align:center;padding:5rem 1.5rem 3.5rem;max-width:640px;margin:0 auto}
-.hero h1{font-size:clamp(2.2rem,6vw,4rem);font-weight:900;line-height:1.08;letter-spacing:-1.5px;margin-bottom:1.2rem}
-.hero h1 .c{color:var(--coral)}
-.hero p{font-size:1.1rem;color:var(--dim);line-height:1.7;margin-bottom:2.5rem}
-.cats{display:flex;flex-wrap:wrap;justify-content:center;gap:.45rem;margin-bottom:3.5rem}
-.cat{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--white);font-size:.75rem;font-weight:600;padding:.3rem .8rem;border-radius:999px;letter-spacing:.3px}
-
-/* CARD */
-.card{background:var(--ivory);color:#1a2a3a;border-radius:20px;padding:2.5rem;max-width:420px;margin:0 auto 2rem;box-shadow:var(--card-shadow)}
-.card h2{font-size:1.15rem;font-weight:800;color:#1a2a3a;margin-bottom:1.5rem;text-align:center}
-.tabs{display:flex;background:rgba(15,28,46,.08);border-radius:10px;padding:3px;margin-bottom:1.5rem}
-.tab{flex:1;padding:.55rem;text-align:center;border-radius:8px;cursor:pointer;font-size:.88rem;font-weight:700;color:#6b7a8d;transition:all .18s}
-.tab.on{background:var(--coral);color:#fff}
-.tab:focus-visible{outline:2px solid var(--coral);outline-offset:2px}
-.fg{margin-bottom:1rem}
-label{display:block;font-size:.72rem;font-weight:700;color:#6b7a8d;margin-bottom:.35rem;letter-spacing:.5px;text-transform:uppercase}
-input{width:100%;background:#fff;border:2px solid #dde3ea;border-radius:8px;padding:.7rem 1rem;color:#1a2a3a;font-size:.97rem;font-family:Inter,sans-serif;transition:border-color .18s;outline:none}
+:root{--navy:#0f1c2e;--ivory:#faf6f0;--coral:#ff5252;--coral2:#e04444;--teal:#00c9a7;--amber:#ffb347;--white:#f0f4f8;--dim:#7a9bb5}
+body{background:var(--navy);color:var(--white);font-family:Inter,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1.5rem}
+.wrap{width:100%;max-width:400px;text-align:center}
+.logo{font-size:3rem;margin-bottom:.5rem}
+h1{font-size:2rem;font-weight:900;letter-spacing:-1px;margin-bottom:.4rem}
+h1 span{color:var(--coral)}
+.tag{color:var(--dim);font-size:.95rem;margin-bottom:2rem;line-height:1.6}
+.live-count{background:rgba(0,201,167,.1);border:1px solid rgba(0,201,167,.25);border-radius:999px;color:var(--teal);font-size:.78rem;font-weight:700;padding:.3rem .85rem;margin-bottom:2rem;display:inline-block}
+.card{background:var(--ivory);border-radius:16px;padding:2rem;color:#1a2a3a;box-shadow:0 20px 56px rgba(0,0,0,.4)}
+.card h2{font-size:1.1rem;font-weight:800;margin-bottom:1.25rem}
+label{display:block;font-size:.72rem;font-weight:700;color:#6b7a8d;margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.5px;text-align:left}
+input{width:100%;background:#fff;border:2px solid #dde3ea;border-radius:8px;padding:.75rem 1rem;font-size:1rem;font-family:Inter,sans-serif;color:#1a2a3a;outline:none;transition:border-color .18s;margin-bottom:1rem}
 input:focus{border-color:var(--coral)}
 input::placeholder{color:#aab5c0}
-.btn{display:block;width:100%;padding:.85rem;border-radius:9px;border:none;font-size:.97rem;font-weight:800;cursor:pointer;transition:all .18s;font-family:Inter,sans-serif;letter-spacing:.2px;min-height:48px}
-.btn-coral{background:var(--coral);color:#fff;margin-top:.5rem}
-.btn-coral:hover{background:var(--coral2);transform:translateY(-1px);box-shadow:0 8px 24px rgba(255,82,82,.3)}
-.btn-coral:focus-visible{outline:2px solid var(--coral);outline-offset:3px}
-.errtxt{color:var(--coral);font-size:.82rem;margin-top:.5rem;text-align:center;min-height:1.2rem}
-.hinttxt{text-align:center;font-size:.76rem;color:#8a9bb0;margin-top:.85rem}
-.quick-play{display:block;width:100%;margin-top:.75rem;padding:.65rem;border-radius:8px;border:2px solid rgba(15,28,46,.12);background:transparent;color:#4a6070;font-size:.88rem;font-weight:600;cursor:pointer;font-family:Inter,sans-serif;transition:all .18s;min-height:44px}
-.quick-play:hover{border-color:var(--teal);color:var(--teal)}
-.quick-play:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
-
-/* HOW */
-.how{max-width:680px;margin:1.5rem auto 4rem;padding:0 1.5rem}
-.how h2{text-align:center;font-size:1.3rem;font-weight:800;margin-bottom:2rem;color:var(--dim)}
-.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem}
-.step{background:rgba(22,40,64,.7);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:1.5rem;text-align:center}
-.snum{width:2.4rem;height:2.4rem;background:var(--coral);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:.95rem;margin:0 auto .85rem}
-.step h3{font-size:.9rem;font-weight:700;margin-bottom:.4rem}
-.step p{font-size:.8rem;color:var(--dim);line-height:1.55}
-
-footer{text-align:center;padding:2rem 1rem;color:var(--dim);font-size:.78rem;border-top:1px solid rgba(255,255,255,.05)}
-
-/* Reduced motion applied via class */
-body.rm *{animation:none!important;transition:none!important}
-body.large-text input,body.large-text .btn,body.large-text label{font-size:1.1rem!important}
-body.high-contrast .cat{border-color:var(--white)}
-body.high-contrast .step{border-color:rgba(255,255,255,.3)}
+.btn{display:block;width:100%;padding:.9rem;border-radius:9px;border:none;font-size:1rem;font-weight:800;cursor:pointer;font-family:Inter,sans-serif;background:var(--coral);color:#fff;transition:all .18s;min-height:52px}
+.btn:hover{background:var(--coral2);transform:translateY(-1px);box-shadow:0 8px 24px rgba(255,82,82,.3)}
+.btn:focus-visible{outline:2px solid var(--coral);outline-offset:3px}
+.err{color:var(--coral);font-size:.82rem;margin-top:.5rem;min-height:1.1rem;text-align:center}
+.hint{font-size:.75rem;color:#8a9bb0;margin-top:.75rem}
+.cats{display:flex;flex-wrap:wrap;justify-content:center;gap:.4rem;margin-top:2rem}
+.cat{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--dim);font-size:.72rem;padding:.25rem .7rem;border-radius:999px}
+footer{color:var(--dim);font-size:.75rem;margin-top:2.5rem}
 </style>
 </head>
 <body>
-<nav>
-  <div class="logo">🎪 Trivia<em> Circus</em></div>
-  <div class="a11y-toggle" role="group" aria-label="Accessibility options">
-    <button id="btn-rm" onclick="toggle('rm')" aria-pressed="false" title="Reduced motion">No Motion</button>
-    <button id="btn-lt" onclick="toggle('lt')" aria-pressed="false" title="Larger text">Large Text</button>
-    <button id="btn-hc" onclick="toggle('hc')" aria-pressed="false" title="High contrast">High Contrast</button>
+<div class="wrap">
+  <div class="logo">🎪</div>
+  <h1>Trivia <span>Circus</span></h1>
+  <p class="tag">The show never stops.<br>Walk in. Answer. Earn your title.</p>
+  <div class="live-count" id="live-count">🟢 Loading...</div>
+  <div class="card">
+    <h2>Pick your name and step in</h2>
+    <label for="pname">Your Pseudonym</label>
+    <input id="pname" type="text" placeholder="CosmicOracle" maxlength="24" autocomplete="off">
+    <button class="btn" onclick="enter()" aria-label="Enter Trivia Circus">Enter the Ring 🎪</button>
+    <div class="err" id="err"></div>
+    <p class="hint">No account needed. Leave anytime.</p>
   </div>
-</nav>
-
-<div class="hero">
-  <h1>Come for one question.<br><span class="c">Stay to prove everybody wrong.</span></h1>
-  <p>Real-time multiplayer trivia with no chat, no toxicity — just questions, the room&#8217;s verdict, and your chance to be The Oracle.</p>
-  <div class="cats" role="list" aria-label="Question categories">
-    <span class="cat" role="listitem">📜 History</span>
-    <span class="cat" role="listitem">🔬 Science</span>
-    <span class="cat" role="listitem">🌍 Geography</span>
-    <span class="cat" role="listitem">🎭 Culture</span>
-    <span class="cat" role="listitem">🏆 Sports</span>
-    <span class="cat" role="listitem">🃏 Wild Card</span>
+  <div class="cats">
+    <span class="cat">📜 History</span>
+    <span class="cat">🔬 Science</span>
+    <span class="cat">🌍 Geography</span>
+    <span class="cat">🎭 Culture</span>
+    <span class="cat">🏆 Sports</span>
+    <span class="cat">🃏 Wild Card</span>
   </div>
+  <footer>Trivia Circus — Questions for people who actually know things.</footer>
 </div>
-
-<div class="card" role="main">
-  <h2>Ready to play?</h2>
-  <div class="tabs" role="tablist">
-    <div class="tab on" role="tab" aria-selected="true" tabindex="0" id="tab-c" onclick="sw('create')" onkeydown="if(event.key==='Enter'||event.key===' ')sw('create')">Create Room</div>
-    <div class="tab" role="tab" aria-selected="false" tabindex="0" id="tab-j" onclick="sw('join')" onkeydown="if(event.key==='Enter'||event.key===' ')sw('join')">Join Room</div>
-  </div>
-
-  <div id="pnl-create" role="tabpanel" aria-labelledby="tab-c">
-    <div class="fg"><label for="c-name">Your Pseudonym</label>
-      <input id="c-name" type="text" placeholder="e.g. CosmicOracle" maxlength="24" autocomplete="off" aria-describedby="name-hint"></div>
-    <button class="btn btn-coral" onclick="createRoom()" aria-label="Create a new room">Create Room &amp; Invite Friends</button>
-    <button class="quick-play" onclick="quickPlay()" aria-label="Quick play — join a public room instantly">&#9889; Quick Play — jump straight in</button>
-  </div>
-
-  <div id="pnl-join" role="tabpanel" aria-labelledby="tab-j" style="display:none">
-    <div class="fg"><label for="j-name">Your Pseudonym</label>
-      <input id="j-name" type="text" placeholder="e.g. NeuralFalcon" maxlength="24" autocomplete="off"></div>
-    <div class="fg"><label for="j-code">Room Code</label>
-      <input id="j-code" type="text" placeholder="e.g. CIRCUS-4821" maxlength="20" style="text-transform:uppercase" autocomplete="off"></div>
-    <button class="btn btn-coral" onclick="joinRoom()" aria-label="Join existing room">Join Room</button>
-  </div>
-
-  <div class="errtxt" id="err" role="alert" aria-live="polite"></div>
-  <p class="hinttxt" id="name-hint">No account needed. Pseudonym stays yours for the session.</p>
-</div>
-
-<div class="how" aria-label="How it works">
-  <h2>How it works</h2>
-  <div class="steps">
-    <div class="step"><div class="snum" aria-hidden="true">1</div><h3>Pick a Pseudonym</h3><p>No real name, no sign-up. Just a handle that&#8217;s yours for the game.</p></div>
-    <div class="step"><div class="snum" aria-hidden="true">2</div><h3>Everyone Answers at Once</h3><p>Accuracy wins. Speed is a small bonus. No reflexes required.</p></div>
-    <div class="step"><div class="snum" aria-hidden="true">3</div><h3>The Room Reveals</h3><p>See how everyone split. Stand your ground or switch. Earn your title.</p></div>
-  </div>
-</div>
-
-<footer>Trivia Circus &mdash; Questions for people who actually know things. &copy; 2024</footer>
-
+<script src="/socket.io/socket.io.js"></script>
 <script>
-var a11y={rm:false,lt:false,hc:false};
-function toggle(k){
-  var map={rm:'rm',lt:'large-text',hc:'high-contrast'};
-  a11y[k]=!a11y[k];
-  document.body.classList.toggle(map[k],a11y[k]);
-  var btn=document.getElementById('btn-'+k);
-  btn.classList.toggle('on',a11y[k]);
-  btn.setAttribute('aria-pressed',String(a11y[k]));
-  localStorage.setItem('a11y-'+k,a11y[k]?'1':'');
-}
-// Restore prefs
-['rm','lt','hc'].forEach(function(k){if(localStorage.getItem('a11y-'+k))toggle(k)});
-
-function sw(t){
-  var cc=t==='create';
-  document.getElementById('tab-c').classList.toggle('on',cc);
-  document.getElementById('tab-j').classList.toggle('on',!cc);
-  document.getElementById('tab-c').setAttribute('aria-selected',String(cc));
-  document.getElementById('tab-j').setAttribute('aria-selected',String(!cc));
-  document.getElementById('pnl-create').style.display=cc?'':'none';
-  document.getElementById('pnl-join').style.display=cc?'none':'';
-}
-function err(msg){var e=document.getElementById('err');e.textContent=msg;if(msg)setTimeout(function(){e.textContent=''},3500)}
-function slugify(n){return n.trim().replace(/[^a-z0-9]/gi,'')||('Player'+Math.floor(Math.random()*9000+1000))}
-function createRoom(){
-  var n=document.getElementById('c-name').value.trim();
-  if(!n){err('Enter a pseudonym first');document.getElementById('c-name').focus();return}
-  var code='CIRCUS-'+Math.floor(1000+Math.random()*9000);
-  window.location.href='game.html?room='+encodeURIComponent(code)+'&name='+encodeURIComponent(n)+'&host=1';
-}
-function joinRoom(){
-  var n=document.getElementById('j-name').value.trim();
-  var c=document.getElementById('j-code').value.trim().toUpperCase();
-  if(!n){err('Enter a pseudonym');document.getElementById('j-name').focus();return}
-  if(!c){err('Enter a room code');document.getElementById('j-code').focus();return}
-  window.location.href='game.html?room='+encodeURIComponent(c)+'&name='+encodeURIComponent(n);
-}
-function quickPlay(){
-  var n=document.getElementById('c-name').value.trim()||'';
-  var code='CIRCUS-PUBLIC';
-  window.location.href='game.html?room='+encodeURIComponent(code)+'&name='+encodeURIComponent(n||'QuickPlayer');
-}
-document.addEventListener('keydown',function(e){
-  if(e.key==='Enter'){
-    var cc=document.getElementById('pnl-create').style.display!=='none';
-    if(cc)createRoom();else joinRoom();
-  }
+// Show live count via quick socket peek
+var sc = io({transports:['websocket','polling']});
+sc.on('presence', function(d){
+  document.getElementById('live-count').textContent = (d.players && d.players.length > 0)
+    ? '🟢 ' + d.players.length + ' player' + (d.players.length===1?'':'s') + ' in the ring now'
+    : '⭕ Circus is quiet — be the first in';
 });
+sc.emit('peek'); // lightweight presence peek
+
+function err(m){var e=document.getElementById('err');e.textContent=m;setTimeout(function(){e.textContent=''},3000)}
+function enter(){
+  var n=document.getElementById('pname').value.trim();
+  if(!n){err('Enter a name first');document.getElementById('pname').focus();return}
+  window.location.href='game.html?name='+encodeURIComponent(n);
+}
+document.addEventListener('keydown',function(e){if(e.key==='Enter')enter()});
 </script>
 </body>
 </html>

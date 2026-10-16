@@ -1,7 +1,7 @@
 /**
- * Trivia Circus — Game Server
- * Stack: Node.js + Express + Socket.io
- * Architecture: single-process in-memory rooms; swap rooms map for Redis in prod
+ * Trivia Circus — Continuous Always-On Game Server
+ * Architecture: One global loop. Questions run forever.
+ * Players drop in/out. Loop pauses when empty, resumes on first join.
  */
 'use strict';
 const express = require('express');
@@ -12,358 +12,301 @@ const fs = require('fs');
 
 const app = express();
 const httpServer = http.createServer(app);
-const io = new Server(httpServer, {
-  cors: { origin: '*' },
-  transports: ['websocket', 'polling']
-});
-
+const io = new Server(httpServer, { cors: { origin: '*' }, transports: ['websocket','polling'] });
 app.use(express.static(path.join(__dirname, 'public')));
+
 const QUESTIONS = JSON.parse(fs.readFileSync(path.join(__dirname, 'questions/bank.json')));
 
-// ── Config ──────────────────────────────────────────────────────────────────
+// ── Config ────────────────────────────────────────────────────────────────────
 const CFG = {
-  ROUND_MS: 20000,      // question window
-  GRACE_MS: 7000,       // speed bonus if answered within this
-  REVEAL_MS: 5500,      // reveal display time (no stand-your-ground)
-  SYG_MS: 7000,         // stand-your-ground window
-  NEXT_DELAY_MS: 2200,  // pause before next question
-  SPEED_BONUS: 10,      // pts for answering within grace
-  BASE_PTS: 100,        // correct answer base
-  STREAK_PER: 20,       // pts per consecutive correct (capped)
-  STREAK_CAP: 100,
-  TRUST_BONUS: 50,      // unanimous + correct
-  ORACLE_BONUS: 80,     // correct lone dissenter after SYG
-  DD_STAKE: 50,         // double-down wager
-  MAX_PLAYERS: 12,
-  Q_PER_GAME: 10,
+  QUESTION_MS:   22000,   // how long a question stays open
+  REVEAL_MS:     5000,    // how long the reveal shows
+  IDLE_PAUSE_MS: 30000,   // pause loop if no players for this long
+  GRACE_MS:      7000,    // speed bonus window
+  BASE_PTS:      100,
+  SPEED_BONUS:   10,
+  STREAK_PER:    20,
+  STREAK_CAP:    100,
+  TRUST_BONUS:   50,
+  ORACLE_BONUS:  80,
+  DD_STAKE:      50,
 };
 
-// ── Profanity filter (minimal; extend as needed) ─────────────────────────────
+// ── Profanity filter ──────────────────────────────────────────────────────────
 const BLOCKED = new Set(['fuck','shit','ass','bitch','cunt','dick','cock','pussy','nigger','faggot']);
 function clean(str) {
   if (!str || typeof str !== 'string') return '';
   const s = str.trim().slice(0, 24);
-  const lower = s.toLowerCase().replace(/[^a-z0-9 ]/g,'');
-  for (const w of BLOCKED) if (lower.includes(w)) return '';
+  if ([...BLOCKED].some(w => s.toLowerCase().replace(/[^a-z0-9 ]/g,'').includes(w))) return '';
   return s;
 }
-
-// ── Generated pseudonym bank ──────────────────────────────────────────────────
 const ADJ = ['Cosmic','Neural','Quantum','Solar','Arctic','Velvet','Crimson','Neon','Atomic','Lunar','Vivid','Rapid','Prism','Delta','Cobalt'];
 const NON = ['Panda','Falcon','Oracle','Cipher','Sphinx','Nomad','Comet','Vortex','Phantom','Nexus','Glitch','Prism','Titan','Raven','Ember'];
-function genName() { return ADJ[Math.floor(Math.random()*ADJ.length)] + NON[Math.floor(Math.random()*NON.length)]; }
+function genName() { return ADJ[Math.floor(Math.random()*ADJ.length)]+NON[Math.floor(Math.random()*NON.length)]; }
 
 // ── Earned titles ─────────────────────────────────────────────────────────────
 function earnedTitle(stats) {
-  const { correct, wrong, oracle, fast, catWins } = stats;
+  const { correct=0, wrong=0, oracle=0, fast=0, catWins={} } = stats;
   const total = correct + wrong;
-  if (total === 0) return { title: 'Newcomer', emoji: '🌱' };
+  if (total === 0) return { title:'Newcomer', emoji:'🌱' };
   const acc = correct / total;
-  if (oracle >= 2) return { title: 'The Oracle', emoji: '🔮' };
-  if (acc === 1 && total >= 8) return { title: 'The Perfectionist', emoji: '💎' };
-  if (acc >= 0.9 && total >= 6) return { title: 'Brain Trust Elite', emoji: '🧠' };
-  if (fast > correct * 0.7 && correct > 3) return { title: 'The Reflex', emoji: '⚡' };
-  if (oracle === 1) return { title: 'Moment of Oracle', emoji: '✨' };
-  const topCat = Object.entries(catWins||{}).sort((a,b)=>b[1]-a[1])[0];
-  if (topCat && topCat[1] >= 3) {
-    const map = {
-      History: { title: 'The Historian', emoji: '📜' },
-      Science: { title: 'The Scientist', emoji: '🔬' },
-      Geography: { title: 'The Explorer', emoji: '🌍' },
-      Culture: { title: 'The Critic', emoji: '🎭' },
-      Sports: { title: 'The Champion', emoji: '🏆' },
-      'Wild Card': { title: 'The Wildcard', emoji: '🃏' }
-    };
-    return map[topCat[0]] || { title: 'The Specialist', emoji: '🎯' };
+  if (oracle >= 2) return { title:'The Oracle', emoji:'🔮' };
+  if (acc === 1 && total >= 8) return { title:'The Perfectionist', emoji:'💎' };
+  if (acc >= 0.9 && total >= 6) return { title:'Brain Trust Elite', emoji:'🧠' };
+  if (fast > correct * 0.7 && correct > 3) return { title:'The Reflex', emoji:'⚡' };
+  if (oracle === 1) return { title:'Moment of Oracle', emoji:'✨' };
+  const top = Object.entries(catWins).sort((a,b)=>b[1]-a[1])[0];
+  if (top && top[1] >= 3) {
+    const m = {History:'The Historian 📜',Science:'The Scientist 🔬',Geography:'The Explorer 🌍',Culture:'The Critic 🎭',Sports:'The Champion 🏆','Wild Card':'The Wildcard 🃏'};
+    const t = m[top[0]]; if(t) { const p=t.split(' '); return {title:p.slice(0,-1).join(' '),emoji:p[p.length-1]}; }
   }
-  if (acc < 0.35) return { title: 'Brave Soul', emoji: '🫡' };
-  return { title: 'The Analyst', emoji: '📊' };
+  if (acc < 0.35) return { title:'Brave Soul', emoji:'🫡' };
+  return { title:'The Analyst', emoji:'📊' };
 }
 
-// ── Room management ───────────────────────────────────────────────────────────
-const rooms = new Map(); // roomId → Room
+// ── Global circus state ───────────────────────────────────────────────────────
+const circus = {
+  phase: 'idle',        // idle | question | reveal
+  players: new Map(),   // sid → { name, score, streak, doubleDown, stats, lastSeen }
+  qIndex: -1,
+  currentQ: null,
+  answers: new Map(),   // sid → { choice, timeMs }
+  timer: null,
+  idleTimer: null,
+  questionPool: shuffle([...QUESTIONS]),
+  poolIndex: 0,
+};
 
-function makeRoom() {
-  return {
-    players: new Map(),   // sid → PlayerState
-    phase: 'lobby',       // lobby|answering|reveal|syg|gameover
-    questions: [],
-    currentQ: -1,
-    answers: new Map(),   // sid → {choice, timeMs}
-    sygChoices: new Map(),// sid → choice (stand-your-ground)
-    timer: null,
-    host: null,
-    settings: {
-      standYourGround: true,
-      timerOff: false,
-      reactionsMuted: false,
-      locked: false,
-    }
-  };
+function shuffle(arr) { return [...arr].sort(()=>Math.random()-0.5); }
+
+function nextQuestion() {
+  // Rotate through all questions before repeating
+  circus.poolIndex++;
+  if (circus.poolIndex >= circus.questionPool.length) {
+    circus.questionPool = shuffle([...QUESTIONS]);
+    circus.poolIndex = 0;
+  }
+  return circus.questionPool[circus.poolIndex];
 }
 
-function makePlayer(name, sid) {
-  return {
-    id: sid, name,
-    score: 0, streak: 0, doubleDown: false,
-    stats: { correct: 0, wrong: 0, oracle: 0, fast: 0, catWins: {} }
-  };
+function activePlayers() {
+  return [...circus.players.values()].filter(p => p.connected);
 }
 
-function roomLeaderboard(room) {
-  return [...room.players.values()]
-    .sort((a, b) => b.score - a.score)
-    .map(p => ({ name: p.name, score: p.score, streak: p.streak, ...earnedTitle(p.stats) }));
+function broadcast(event, data) {
+  io.emit(event, data);
 }
 
-function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
-
-function pickQuestions(n) {
-  // Balanced across categories
-  const byCat = {};
-  QUESTIONS.forEach(q => { (byCat[q.category] = byCat[q.category]||[]).push(q); });
-  const cats = Object.keys(byCat);
-  const perCat = Math.ceil(n / cats.length);
-  const picked = [];
-  cats.forEach(c => picked.push(...shuffle(byCat[c]).slice(0, perCat)));
-  return shuffle(picked).slice(0, n);
+function presencePayload() {
+  return activePlayers().map(p => ({
+    name: p.name, score: p.score, streak: p.streak,
+    answered: circus.answers.has(p.id)
+  }));
 }
 
-// ── Timer helpers ─────────────────────────────────────────────────────────────
-function clearRoomTimer(room) { if (room.timer) { clearTimeout(room.timer); room.timer = null; } }
+// ── Game loop ─────────────────────────────────────────────────────────────────
+function startQuestion() {
+  clearTimeout(circus.timer);
+  clearTimeout(circus.idleTimer);
 
-// ── Scoring ───────────────────────────────────────────────────────────────────
-function scoreRound(room, answerKey, isSYG) {
-  const q = room.questions[room.currentQ];
-  const totalAnswered = room.answers.size;
-  const tally = { A: 0, B: 0, C: 0, D: 0 };
-  room.answers.forEach(a => { tally[a.choice] = (tally[a.choice] || 0) + 1; });
-  const correctCount = tally[answerKey] || 0;
-  const isUnanimous = totalAnswered > 1 && correctCount === totalAnswered;
-  const isSolo = totalAnswered > 1 && correctCount === 1;
+  if (activePlayers().length === 0) {
+    circus.phase = 'idle';
+    broadcast('circus_idle', { msg: 'The Circus is resting... walk in to wake it up 🎪' });
+    return;
+  }
 
-  room.answers.forEach((a, sid) => {
-    const player = room.players.get(sid);
+  const q = nextQuestion();
+  circus.currentQ = q;
+  circus.answers.clear();
+  circus.phase = 'question';
+  const sentAt = Date.now();
+
+  broadcast('question', {
+    index: ++circus.qIndex,
+    text: q.text,
+    options: q.options,
+    category: q.category,
+    difficulty: q.difficulty,
+    timeMs: CFG.QUESTION_MS,
+    sentAt,
+    presence: presencePayload(),
+  });
+
+  circus.timer = setTimeout(() => revealQuestion(sentAt), CFG.QUESTION_MS);
+}
+
+function revealQuestion(sentAt) {
+  clearTimeout(circus.timer);
+  circus.phase = 'reveal';
+
+  const q = circus.currentQ;
+  const tally = { A:0, B:0, C:0, D:0 };
+  circus.answers.forEach(a => { tally[a.choice] = (tally[a.choice]||0)+1; });
+  const totalAnswered = circus.answers.size;
+  const pct = {};
+  ['A','B','C','D'].forEach(k => { pct[k] = totalAnswered ? Math.round((tally[k]||0)/totalAnswered*100) : 0; });
+  const isUnanimous = totalAnswered > 1 && Object.values(tally).filter(v=>v>0).length === 1 && (tally[q.answer]||0) === totalAnswered;
+
+  // Score everyone who answered
+  const results = {};
+  circus.answers.forEach((a, sid) => {
+    const player = circus.players.get(sid);
     if (!player) return;
-    const correct = a.choice === answerKey;
-    player.stats.correct += correct ? 1 : 0;
-    player.stats.wrong += correct ? 0 : 1;
-    if (correct) player.stats.fast += a.timeMs <= CFG.GRACE_MS ? 1 : 0;
-    if (correct) player.stats.catWins[q.category] = (player.stats.catWins[q.category]||0)+1;
-
+    const correct = a.choice === q.answer;
+    player.stats.correct = (player.stats.correct||0) + (correct?1:0);
+    player.stats.wrong = (player.stats.wrong||0) + (correct?0:1);
     if (correct) {
-      const speed   = (!room.settings.timerOff && a.timeMs <= CFG.GRACE_MS) ? CFG.SPEED_BONUS : 0;
-      const streak  = Math.min(player.streak * CFG.STREAK_PER, CFG.STREAK_CAP);
-      const trust   = isUnanimous ? CFG.TRUST_BONUS : 0;
-      const dd      = player.doubleDown ? CFG.DD_STAKE : 0;
-      const earned  = CFG.BASE_PTS + speed + streak + trust + dd;
-      player.score += earned;
-      player.streak++;
-      if (isSolo && isUnanimous === false) player.stats.oracle++;
-      io.to(sid).emit('answer_result', { correct: true, earned, speed, streak, trust, dd, oracle: isSolo });
+      const speed  = a.timeMs <= CFG.GRACE_MS ? CFG.SPEED_BONUS : 0;
+      const streak = Math.min((player.streak||0) * CFG.STREAK_PER, CFG.STREAK_CAP);
+      const trust  = isUnanimous ? CFG.TRUST_BONUS : 0;
+      const dd     = player.doubleDown ? CFG.DD_STAKE : 0;
+      const earned = CFG.BASE_PTS + speed + streak + trust + dd;
+      player.score = (player.score||0) + earned;
+      player.streak = (player.streak||0) + 1;
+      if (!player.stats.catWins) player.stats.catWins = {};
+      player.stats.catWins[q.category] = (player.stats.catWins[q.category]||0)+1;
+      results[sid] = { correct:true, earned, speed, streak, trust, dd };
     } else {
-      if (player.doubleDown) player.score = Math.max(0, player.score - CFG.DD_STAKE);
+      if (player.doubleDown) player.score = Math.max(0, (player.score||0) - CFG.DD_STAKE);
       player.streak = 0;
-      io.to(sid).emit('answer_result', { correct: false, earned: 0, oracle: false });
+      results[sid] = { correct:false, earned:0 };
     }
     player.doubleDown = false;
   });
 
-  return { tally, isUnanimous, isSolo, correctCount };
-}
+  // Send individual results
+  Object.entries(results).forEach(([sid, r]) => io.to(sid).emit('answer_result', r));
 
-// ── Game flow ─────────────────────────────────────────────────────────────────
-function advanceQuestion(roomId) {
-  const room = rooms.get(roomId);
-  if (!room) return;
-  clearRoomTimer(room);
-  room.currentQ++;
-  room.answers.clear();
-  room.sygChoices.clear();
+  // Leaderboard: all connected players sorted by score
+  const lb = [...circus.players.values()]
+    .filter(p => p.connected)
+    .sort((a,b)=>(b.score||0)-(a.score||0))
+    .map(p => ({ name:p.name, score:p.score||0, streak:p.streak||0, ...earnedTitle(p.stats||{}) }));
 
-  if (room.currentQ >= room.questions.length) {
-    room.phase = 'gameover';
-    io.to(roomId).emit('game_over', { leaderboard: roomLeaderboard(room) });
-    return;
-  }
-
-  const q = room.questions[room.currentQ];
-  room.phase = 'answering';
-  const sentAt = Date.now();
-  io.to(roomId).emit('question', {
-    index: room.currentQ, total: room.questions.length,
-    text: q.text, options: q.options, category: q.category,
-    difficulty: q.difficulty, timeMs: CFG.ROUND_MS,
-    timerOff: room.settings.timerOff, sentAt
+  broadcast('reveal', {
+    answer: q.answer,
+    explanation: q.explanation,
+    tally, pct,
+    isUnanimous,
+    leaderboard: lb,
+    presence: presencePayload(),
   });
 
-  if (!room.settings.timerOff) {
-    room.timer = setTimeout(() => revealRound(roomId), CFG.ROUND_MS);
-  }
-}
-
-function revealRound(roomId) {
-  const room = rooms.get(roomId);
-  if (!room || room.phase !== 'answering') return;
-  clearRoomTimer(room);
-  room.phase = 'reveal';
-
-  const q = room.questions[room.currentQ];
-  const { tally, isUnanimous, isSolo } = scoreRound(room, q.answer);
-
-  const totalAnswered = room.answers.size;
-  const pct = {};
-  ['A','B','C','D'].forEach(k => {
-    pct[k] = totalAnswered ? Math.round((tally[k]||0)/totalAnswered*100) : 0;
-  });
-  const divided = !isUnanimous && totalAnswered > 1 && Object.values(tally).filter(v=>v>0).length > 1;
-
-  io.to(roomId).emit('reveal', {
-    answer: q.answer, explanation: q.explanation,
-    tally, pct, isUnanimous, divided,
-    leaderboard: roomLeaderboard(room)
-  });
-
-  if (divided && room.settings.standYourGround) {
-    room.phase = 'syg';
-    io.to(roomId).emit('stand_your_ground', { timeMs: CFG.SYG_MS });
-    room.timer = setTimeout(() => resolveSYG(roomId), CFG.SYG_MS);
-  } else {
-    room.timer = setTimeout(() => endRound(roomId), CFG.REVEAL_MS);
-  }
-}
-
-function resolveSYG(roomId) {
-  const room = rooms.get(roomId);
-  if (!room) return;
-  clearRoomTimer(room);
-  const q = room.questions[room.currentQ];
-  // Award Oracle bonus to correct SYG switchers-to-correct or stayers-who-were-right
-  room.sygChoices.forEach((choice, sid) => {
-    if (choice === q.answer) {
-      const player = room.players.get(sid);
-      if (player) {
-        player.score += CFG.ORACLE_BONUS;
-        player.stats.oracle++;
-        io.to(sid).emit('oracle_moment', { bonus: CFG.ORACLE_BONUS });
-      }
+  // Schedule next question or idle check
+  circus.timer = setTimeout(() => {
+    if (activePlayers().length === 0) {
+      circus.phase = 'idle';
+      broadcast('circus_idle', { msg: 'The Circus is resting... walk in to wake it up 🎪' });
+      startIdleCheck();
+    } else {
+      startQuestion();
     }
-  });
-  endRound(roomId);
+  }, CFG.REVEAL_MS);
 }
 
-function endRound(roomId) {
-  const room = rooms.get(roomId);
-  if (!room) return;
-  clearRoomTimer(room);
-  io.to(roomId).emit('round_end', { leaderboard: roomLeaderboard(room) });
-  room.timer = setTimeout(() => advanceQuestion(roomId), CFG.NEXT_DELAY_MS);
+function startIdleCheck() {
+  clearTimeout(circus.idleTimer);
+  circus.idleTimer = setTimeout(() => {
+    // Still idle after timeout — just wait for join event to trigger
+  }, CFG.IDLE_PAUSE_MS);
 }
 
 // ── Socket events ─────────────────────────────────────────────────────────────
 io.on('connection', socket => {
-  socket.on('join_room', ({ roomId, name }) => {
+  socket.on('join', ({ name }) => {
     const cleanName = clean(name) || genName();
-    if (!rooms.has(roomId)) rooms.set(roomId, makeRoom());
-    const room = rooms.get(roomId);
-    if (room.settings.locked) { socket.emit('error', { msg: 'Room is locked' }); return; }
-    if (room.phase !== 'lobby') { socket.emit('error', { msg: 'Game in progress' }); return; }
-    if (room.players.size >= CFG.MAX_PLAYERS) { socket.emit('error', { msg: 'Room full' }); return; }
-    if (!room.host) room.host = socket.id;
-    room.players.set(socket.id, makePlayer(cleanName, socket.id));
-    socket.join(roomId);
-    socket.data.roomId = roomId;
+    const player = {
+      id: socket.id, name: cleanName,
+      score: 0, streak: 0, doubleDown: false,
+      connected: true,
+      stats: { correct:0, wrong:0, oracle:0, fast:0, catWins:{} }
+    };
+    circus.players.set(socket.id, player);
     socket.data.name = cleanName;
-    io.to(roomId).emit('player_list', { players: playerList(room), host: room.players.get(room.host)?.name });
-    socket.emit('joined', { roomId, name: cleanName, isHost: socket.id === room.host, settings: room.settings });
-  });
 
-  socket.on('start_game', ({ roomId }) => {
-    const room = rooms.get(roomId);
-    if (!room || socket.id !== room.host || room.phase !== 'lobby') return;
-    room.questions = pickQuestions(CFG.Q_PER_GAME);
-    room.phase = 'playing';
-    io.to(roomId).emit('game_starting', { questionCount: room.questions.length });
-    setTimeout(() => advanceQuestion(roomId), 1500);
-  });
+    // Tell the joining player what's happening right now
+    const state = {
+      name: cleanName,
+      phase: circus.phase,
+      presence: presencePayload(),
+      leaderboard: [...circus.players.values()]
+        .filter(p=>p.connected)
+        .sort((a,b)=>(b.score||0)-(a.score||0))
+        .map(p=>({name:p.name,score:p.score||0,streak:p.streak||0,...earnedTitle(p.stats||{})}))
+    };
 
-  socket.on('submit_answer', ({ roomId, choice, timeMs }) => {
-    const room = rooms.get(roomId);
-    if (!room || room.phase !== 'answering') return;
-    if (room.answers.has(socket.id)) return;
-    if (!['A','B','C','D'].includes(choice)) return;
-    room.answers.set(socket.id, { choice, timeMs: Math.max(0, timeMs) });
-    io.to(socket.id).emit('answer_locked', { choice });
-    io.to(roomId).emit('answer_count', { count: room.answers.size, total: room.players.size });
-    if (room.answers.size === room.players.size) {
-      clearRoomTimer(room);
-      revealRound(roomId);
+    if (circus.phase === 'question' && circus.currentQ) {
+      const elapsed = Date.now() - (circus.currentQ._sentAt || Date.now());
+      const remaining = Math.max(0, CFG.QUESTION_MS - elapsed);
+      state.currentQuestion = {
+        text: circus.currentQ.text,
+        options: circus.currentQ.options,
+        category: circus.currentQ.category,
+        difficulty: circus.currentQ.difficulty,
+        timeRemaining: remaining,
+      };
+    }
+
+    socket.emit('joined', state);
+
+    // Broadcast new presence
+    broadcast('presence', { players: presencePayload() });
+
+    // If circus was idle, wake it up
+    if (circus.phase === 'idle') {
+      clearTimeout(circus.idleTimer);
+      setTimeout(() => startQuestion(), 1500);
     }
   });
 
-  socket.on('double_down', ({ roomId }) => {
-    const room = rooms.get(roomId);
-    if (!room || room.phase !== 'answering') return;
-    const p = room.players.get(socket.id);
+  socket.on('submit_answer', ({ choice, timeMs }) => {
+    if (circus.phase !== 'question') return;
+    if (circus.answers.has(socket.id)) return;
+    if (!['A','B','C','D'].includes(choice)) return;
+    circus.answers.set(socket.id, { choice, timeMs: Math.max(0, timeMs) });
+    socket.emit('answer_locked', { choice });
+    broadcast('presence', { players: presencePayload() });
+    // If ALL connected players have answered, advance early
+    const connected = activePlayers().map(p=>p.id);
+    if (connected.every(sid => circus.answers.has(sid)) && connected.length > 0) {
+      clearTimeout(circus.timer);
+      revealQuestion(null);
+    }
+  });
+
+  socket.on('double_down', () => {
+    if (circus.phase !== 'question') return;
+    const p = circus.players.get(socket.id);
     if (p && !p.doubleDown) { p.doubleDown = true; socket.emit('doubled_down'); }
   });
 
-  socket.on('stand_ground', ({ roomId, choice }) => {
-    const room = rooms.get(roomId);
-    if (!room || room.phase !== 'syg') return;
-    if (['A','B','C','D'].includes(choice)) room.sygChoices.set(socket.id, choice);
-  });
-
-  socket.on('reaction', ({ roomId, emoji }) => {
-    const room = rooms.get(roomId);
-    if (!room || room.settings.reactionsMuted) return;
+  socket.on('reaction', ({ emoji }) => {
     const ALLOWED = ['😤 Knew It','🍀 Lucky Guess','😱 No Way','🔄 Rematch'];
     if (!ALLOWED.includes(emoji)) return;
-    io.to(roomId).emit('reaction', { name: socket.data.name, emoji });
-  });
-
-  // Host controls
-  socket.on('host_setting', ({ roomId, key, value }) => {
-    const room = rooms.get(roomId);
-    if (!room || socket.id !== room.host) return;
-    if (['standYourGround','timerOff','reactionsMuted','locked'].includes(key)) {
-      room.settings[key] = !!value;
-      io.to(roomId).emit('settings_updated', { settings: room.settings });
-    }
-  });
-
-  socket.on('host_remove', ({ roomId, targetName }) => {
-    const room = rooms.get(roomId);
-    if (!room || socket.id !== room.host) return;
-    const entry = [...room.players.entries()].find(([,p]) => p.name === targetName);
-    if (!entry) return;
-    const [sid] = entry;
-    io.to(sid).emit('removed');
-    io.sockets.sockets.get(sid)?.leave(roomId);
-    room.players.delete(sid);
-    io.to(roomId).emit('player_list', { players: playerList(room), host: room.players.get(room.host)?.name });
+    const p = circus.players.get(socket.id);
+    if (p) broadcast('reaction', { name: p.name, emoji });
   });
 
   socket.on('disconnect', () => {
-    const roomId = socket.data.roomId;
-    if (!roomId) return;
-    const room = rooms.get(roomId);
-    if (!room) return;
-    room.players.delete(socket.id);
-    if (room.players.size === 0) { clearRoomTimer(room); rooms.delete(roomId); return; }
-    if (room.host === socket.id) room.host = [...room.players.keys()][0];
-    io.to(roomId).emit('player_list', { players: playerList(room), host: room.players.get(room.host)?.name });
+    const p = circus.players.get(socket.id);
+    if (p) p.connected = false;
+    // Clean up disconnected players after a grace period
+    setTimeout(() => {
+      const pp = circus.players.get(socket.id);
+      if (pp && !pp.connected) circus.players.delete(socket.id);
+      broadcast('presence', { players: presencePayload() });
+    }, 10000);
   });
 });
 
-function playerList(room) {
-  return [...room.players.values()].map(p => ({ name: p.name, score: p.score, streak: p.streak }));
-}
-
-// ── Export for tests ──────────────────────────────────────────────────────────
-module.exports = { scoreRound, earnedTitle, clean, genName, pickQuestions, CFG };
+// ── Exports for tests ─────────────────────────────────────────────────────────
+module.exports = { clean, genName, earnedTitle, CFG };
 
 const PORT = process.env.PORT || 3001;
 if (require.main === module) {
-  httpServer.listen(PORT, '127.0.0.1', () => console.log('Trivia Circus server: http://127.0.0.1:'+PORT));
+  httpServer.listen(PORT, '127.0.0.1', () => {
+    console.log('Trivia Circus 🎪 always-on server: http://127.0.0.1:'+PORT);
+    // Start the first question after a short warm-up if someone joins within idle timeout
+    circus.phase = 'idle';
+  });
 }
