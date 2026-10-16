@@ -79,6 +79,20 @@ body{background:var(--navy);color:var(--white);font-family:Inter,sans-serif;heig
 @keyframes popIn{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:translateX(0)}}
 @keyframes fadeOut{from{opacity:1}to{opacity:0}}
 @media(max-width:560px){.side{width:120px}.opts{grid-template-columns:1fr}.qtext{font-size:1rem}.okey{display:none}}
+/* All-time leaderboard sidebar section */
+.side-sep{height:1px;background:rgba(255,255,255,.06);margin:.25rem 0}
+.side-head-alb{padding:.65rem 1rem;font-size:.65rem;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:1px;flex-shrink:0}
+.alb-row{display:flex;align-items:center;gap:.4rem;padding:.4rem .7rem;border-bottom:1px solid rgba(255,255,255,.04);font-size:.7rem}
+.alb-rank{width:1.25rem;text-align:center;font-weight:800;color:var(--dim);flex-shrink:0}
+.alb-rank.top{color:var(--amber)}
+.alb-name{flex:1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.alb-name.me{color:var(--teal)}
+.alb-pts{color:var(--teal);font-weight:700;flex-shrink:0}
+/* Lifetime score in bar */
+.mylifetime{font-size:.72rem;color:var(--amber);font-weight:700;display:none}
+/* Profile name in bar (generated name) */
+.myname{font-size:.72rem;color:var(--dim);font-weight:600;max-width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
@@ -86,11 +100,16 @@ body{background:var(--navy);color:var(--white);font-family:Inter,sans-serif;heig
   <div class="logo">&#127914; Trivia<em> Circus</em></div>
   <div class="qctr" id="qctr">Live</div>
   <div class="myscore" id="myscore">0 pts</div>
+  <div class="mylifetime" id="mylifetime" aria-label="Lifetime score">Lifetime: 0</div>
+  <div class="myname" id="myname" aria-label="Your circus name"></div>
 </div>
 <div class="layout">
   <aside class="side">
     <div class="side-head">In the Ring</div>
     <div class="plist" id="plist" role="list"></div>
+    <div class="side-sep" aria-hidden="true"></div>
+    <div class="side-head-alb">All-Time</div>
+    <div id="alb" role="list" aria-label="All-time leaderboard"></div>
   </aside>
   <main class="main">
     <div class="announce" id="announce" role="status" aria-live="assertive"></div>
@@ -324,6 +343,51 @@ function chooseStand(decision){
     showSwitchChoices();
   }
 }
+// ── Persistent profile + all-time leaderboard ──────────────────────────────
+var myLifetimeScore = 0;
+var myProfileId = null;
+function updateAllTimeBoard(board) {
+  var el = G('alb');
+  el.innerHTML = '';
+  if (!board || !board.length) return;
+  board.forEach(function(p) {
+    var row = document.createElement('div');
+    row.className = 'alb-row';
+    row.setAttribute('role','listitem');
+    var rank = document.createElement('span');
+    rank.className = 'alb-rank' + (p.rank <= 3 ? ' top' : '');
+    rank.textContent = p.rank;
+    var name = document.createElement('span');
+    name.className = 'alb-name' + (p.id === myProfileId ? ' me' : '');
+    name.textContent = p.effective_name || p.display_name || '?';
+    var pts = document.createElement('span');
+    pts.className = 'alb-pts';
+    pts.textContent = p.lifetime_score + 'pts';
+    row.appendChild(rank); row.appendChild(name); row.appendChild(pts);
+    el.appendChild(row);
+  });
+}
+socket.on('circus_profile', function(p) {
+  if (!p) return;
+  myProfileId = p.id;
+  myLifetimeScore = p.lifetime_score || 0;
+  var nameEl = G('myname');
+  if (nameEl) { nameEl.textContent = p.effective_name || p.display_name || ''; nameEl.style.display = ''; }
+  var lifEl = G('mylifetime');
+  if (lifEl && myLifetimeScore > 0) { lifEl.textContent = 'Lifetime: '+myLifetimeScore+'pts'; lifEl.style.display = ''; }
+});
+socket.on('circus_leaderboard', function(d) {
+  if (d && d.leaderboard) updateAllTimeBoard(d.leaderboard);
+  // Also refresh lifetime score if we appear
+  if (d && d.leaderboard && myProfileId) {
+    var me = d.leaderboard.find(function(p) { return p.id === myProfileId; });
+    if (me) {
+      myLifetimeScore = me.lifetime_score;
+      var lifEl = G('mylifetime');
+      if (lifEl) { lifEl.textContent = 'Lifetime: '+myLifetimeScore+'pts'; lifEl.style.display = myLifetimeScore > 0 ? '' : 'none'; }
+    }
+  }
+});
 function react(e){socket.emit('reaction',{emoji:e});toast(e)}
 socket.on('reaction',function(d){
   if(!d||typeof d.name!=='string'||typeof d.emoji!=='string') return;

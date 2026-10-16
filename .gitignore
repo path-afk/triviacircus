@@ -5,3 +5,8 @@ node_modules/
 /tmp/
 # Keep importer/cache — it's the licensed production question data (CC BY-SA 4.0)
 # node_modules excluded above; cache intentionally included
+
+# Runtime SQLite data (never commit player data)
+data/*.db
+data/*.db-shm
+data/*.db-wal

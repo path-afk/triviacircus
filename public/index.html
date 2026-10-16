@@ -8,70 +8,183 @@
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--navy:#0f1c2e;--ivory:#faf6f0;--coral:#ff5252;--coral2:#e04444;--teal:#00c9a7;--amber:#ffb347;--white:#f0f4f8;--dim:#7a9bb5}
 body{background:var(--navy);color:var(--white);font-family:Inter,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1.5rem}
-.wrap{width:100%;max-width:400px;text-align:center}
+.wrap{width:100%;max-width:420px;text-align:center}
 .logo{font-size:3rem;margin-bottom:.5rem}
 h1{font-size:2rem;font-weight:900;letter-spacing:-1px;margin-bottom:.4rem}
 h1 span{color:var(--coral)}
 .tag{color:var(--dim);font-size:.95rem;margin-bottom:2rem;line-height:1.6}
 .live-count{background:rgba(0,201,167,.1);border:1px solid rgba(0,201,167,.25);border-radius:999px;color:var(--teal);font-size:.78rem;font-weight:700;padding:.3rem .85rem;margin-bottom:2rem;display:inline-block}
 .card{background:var(--ivory);border-radius:16px;padding:2rem;color:#1a2a3a;box-shadow:0 20px 56px rgba(0,0,0,.4)}
-.card h2{font-size:1.1rem;font-weight:800;margin-bottom:1.25rem}
-label{display:block;font-size:.72rem;font-weight:700;color:#6b7a8d;margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.5px;text-align:left}
-input{width:100%;background:#fff;border:2px solid #dde3ea;border-radius:8px;padding:.75rem 1rem;font-size:1rem;font-family:Inter,sans-serif;color:#1a2a3a;outline:none;transition:border-color .18s;margin-bottom:1rem}
-input:focus{border-color:var(--coral)}
-input::placeholder{color:#aab5c0}
+.card h2{font-size:1.1rem;font-weight:800;margin-bottom:.5rem}
+.card-sub{font-size:.78rem;color:#7a8a9b;margin-bottom:1.25rem}
+/* Visually hidden but accessible to screen readers */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+/* Generated name badge */
+.name-badge{background:#f0f4f8;border:2px solid #dde3ea;border-radius:12px;padding:1rem 1.25rem;margin-bottom:.75rem;text-align:center;min-height:56px;display:flex;align-items:center;justify-content:center}
+.name-badge span{font-size:1.3rem;font-weight:900;color:#1a2a3a;letter-spacing:-.5px}
+.btn-regen{display:flex;align-items:center;justify-content:center;gap:.4rem;width:100%;background:transparent;border:1.5px solid #dde3ea;border-radius:8px;padding:.6rem 1rem;font-size:.85rem;font-weight:700;color:#4a6070;cursor:pointer;font-family:Inter,sans-serif;margin-bottom:.6rem;min-height:48px;transition:all .15s}
+.btn-regen:hover{border-color:var(--teal);color:var(--teal)}
+.btn-regen:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.btn-regen:disabled{opacity:.45;cursor:not-allowed}
+.lifetime{font-size:.78rem;color:#4a6070;font-weight:600;margin-bottom:.5rem;background:rgba(0,201,167,.07);border-radius:6px;padding:.35rem .75rem;text-align:center;display:none}
+.cookie-note{font-size:.73rem;color:#7a8a9b;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:center;gap:.3rem}
+.divider{border:none;border-top:1px solid #dde3ea;margin:1rem 0}
 .btn{display:block;width:100%;padding:.9rem;border-radius:9px;border:none;font-size:1rem;font-weight:800;cursor:pointer;font-family:Inter,sans-serif;background:var(--coral);color:#fff;transition:all .18s;min-height:52px}
 .btn:hover{background:var(--coral2);transform:translateY(-1px);box-shadow:0 8px 24px rgba(255,82,82,.3)}
 .btn:focus-visible{outline:2px solid var(--coral);outline-offset:3px}
-.err{color:var(--coral);font-size:.82rem;margin-top:.5rem;min-height:1.1rem;text-align:center}
-.hint{font-size:.75rem;color:#8a9bb0;margin-top:.75rem}
+.err{color:var(--coral);font-size:.82rem;margin-top:.6rem;min-height:1.1rem;text-align:center}
+.cookie-warn{background:rgba(255,179,71,.1);border:1px solid rgba(255,179,71,.3);border-radius:8px;padding:.6rem .85rem;color:#8a6000;font-size:.75rem;margin-top:.75rem;display:none;text-align:left;line-height:1.5}
 .cats{display:flex;flex-wrap:wrap;justify-content:center;gap:.4rem;margin-top:2rem}
 .cat{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--dim);font-size:.72rem;padding:.25rem .7rem;border-radius:999px}
 footer{color:var(--dim);font-size:.75rem;margin-top:2.5rem}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="logo">🎪</div>
+  <div class="logo" aria-hidden="true">🎪</div>
   <h1>Trivia <span>Circus</span></h1>
   <p class="tag">The show never stops.<br>Walk in. Answer. Earn your title.</p>
-  <div class="live-count" id="live-count">🟢 Loading...</div>
+  <div class="live-count" id="live-count" aria-live="polite" aria-atomic="true">🟢 Loading...</div>
+
   <div class="card">
-    <h2>Pick your name and step in</h2>
-    <label for="pname">Your Pseudonym</label>
-    <input id="pname" type="text" placeholder="CosmicOracle" maxlength="24" autocomplete="off">
-    <button class="btn" onclick="enter()" aria-label="Enter Trivia Circus">Enter the Ring 🎪</button>
-    <div class="err" id="err"></div>
-    <p class="hint">No account needed. Leave anytime.</p>
+    <h2>Your circus name</h2>
+    <p class="card-sub">Auto-assigned — changes any time. Score always saved.</p>
+
+    <!-- Screen reader status region for name changes -->
+    <div id="name-status" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Generated name display — this is the primary identity -->
+    <div class="name-badge" aria-label="Your assigned circus name">
+      <span id="name-display" tabindex="0">Loading…</span>
+    </div>
+
+    <button class="btn-regen" id="regen-btn" onclick="regenName()"
+      aria-label="Give me a different circus name" aria-controls="name-display">
+      🎲 Give me another name
+    </button>
+
+    <!-- Lifetime score shown if player has played before -->
+    <div class="lifetime" id="lifetime-score" aria-live="polite"></div>
+
+    <!-- Cookie/privacy note -->
+    <p class="cookie-note" id="cookie-note">
+      <span aria-hidden="true">🔒</span>
+      Score saved to this browser — no account needed
+    </p>
+
+    <hr class="divider" aria-hidden="true">
+
+    <button class="btn" id="enter-btn" onclick="enter()"
+      aria-label="Enter Trivia Circus and start playing">
+      Enter the Ring 🎪
+    </button>
+    <div class="err" id="err" role="alert" aria-live="assertive"></div>
+
+    <!-- Shown only when cookies appear to be blocked -->
+    <div class="cookie-warn" id="cookie-warn" role="status">
+      ⚠️ Cookies appear to be blocked. Your score progress won't be saved across visits.
+    </div>
   </div>
-  <div class="cats">
-    <span class="cat">📜 History</span>
-    <span class="cat">🔬 Science</span>
-    <span class="cat">🌍 Geography</span>
-    <span class="cat">🎭 Culture</span>
-    <span class="cat">🏆 Sports</span>
-    <span class="cat">🃏 Wild Card</span>
+
+  <div class="cats" aria-label="Available categories">
+    <span class="cat">📜 History</span><span class="cat">🔬 Science</span>
+    <span class="cat">🌍 Geography</span><span class="cat">🎭 Culture</span>
+    <span class="cat">🏆 Sports</span><span class="cat">🃏 Wild Card</span>
   </div>
   <footer>Trivia Circus — Questions for people who actually know things.</footer>
 </div>
+
 <script src="/socket.io/socket.io.js"></script>
 <script>
-// Show live count via quick socket peek
+'use strict';
+// ── Live presence peek (session sidebar, lightweight) ──────────────────────
 var sc = io({transports:['websocket','polling']});
-sc.on('presence', function(d){
-  document.getElementById('live-count').textContent = (d.players && d.players.length > 0)
+sc.on('presence', function(d) {
+  var el = document.getElementById('live-count');
+  el.textContent = (d.players && d.players.length > 0)
     ? '🟢 ' + d.players.length + ' player' + (d.players.length===1?'':'s') + ' in the ring now'
     : '⭕ Circus is quiet — be the first in';
 });
-sc.emit('peek'); // lightweight presence peek
+sc.emit('peek');
 
-function err(m){var e=document.getElementById('err');e.textContent=m;setTimeout(function(){e.textContent=''},3000)}
-function enter(){
-  var n=document.getElementById('pname').value.trim();
-  if(!n){err('Enter a name first');document.getElementById('pname').focus();return}
-  window.location.href='game.html?name='+encodeURIComponent(n);
+// ── Profile management ─────────────────────────────────────────────────────
+var myName = '';
+var loadError = false;
+
+function showErr(m) {
+  var e = document.getElementById('err');
+  e.textContent = m;
+  setTimeout(function() { if (e.textContent === m) e.textContent = ''; }, 3500);
 }
-document.addEventListener('keydown',function(e){if(e.key==='Enter')enter()});
+
+async function loadProfile() {
+  try {
+    var r = await fetch('/api/profile');
+    if (!r.ok) throw new Error('status ' + r.status);
+    var p = await r.json();
+    myName = p.effective_name || p.display_name || '';
+    var nd = document.getElementById('name-display');
+    nd.textContent = myName;
+    // Announce to screen reader
+    document.getElementById('name-status').textContent = 'Your circus name is ' + myName;
+
+    // Show lifetime score if player has played before
+    if (p.lifetime_score > 0) {
+      var ls = document.getElementById('lifetime-score');
+      ls.textContent = '🏆 Lifetime score: ' + p.lifetime_score + ' pts · ' + p.correct_answers + ' correct';
+      ls.style.display = 'block';
+    }
+
+    // If we got a profile, cookies are working
+    document.getElementById('cookie-warn').style.display = 'none';
+  } catch (e) {
+    loadError = true;
+    document.getElementById('name-display').textContent = 'Error loading';
+    document.getElementById('cookie-warn').style.display = 'block';
+  }
+}
+
+async function regenName() {
+  var btn = document.getElementById('regen-btn');
+  var nd  = document.getElementById('name-display');
+  btn.disabled = true;
+  btn.textContent = '🎲 Generating…';
+  try {
+    var r = await fetch('/api/profile/rename', { method: 'POST' });
+    if (r.status === 429) { showErr('Wait a moment before renaming again.'); return; }
+    if (!r.ok) throw new Error('status ' + r.status);
+    var p = await r.json();
+    myName = p.effective_name || p.display_name || myName;
+    nd.textContent = myName;
+    nd.focus();
+    // Screen reader announcement
+    var ns = document.getElementById('name-status');
+    ns.textContent = '';
+    // Small delay so screen readers re-announce
+    setTimeout(function() { ns.textContent = 'New name: ' + myName; }, 80);
+  } catch (e) {
+    showErr('Could not generate a new name. Try again.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🎲 Give me another name';
+  }
+}
+
+function enter() {
+  if (!myName && !loadError) { showErr('Your name is still loading. One moment…'); return; }
+  var name = myName || '';
+  window.location.href = 'game.html?name=' + encodeURIComponent(name);
+}
+
+// Keyboard: Enter on any element in the card enters the game
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && document.activeElement.id !== 'regen-btn') enter();
+  // 1-9 keys: future shortcuts (no-op here)
+});
+
+// Load profile on page ready
+loadProfile();
 </script>
 </body>
 </html>

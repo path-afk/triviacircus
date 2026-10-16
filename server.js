@@ -9,7 +9,12 @@ const express = require('express');
 const http    = require('http');
 const { Server } = require('socket.io');
 const path    = require('path');
-const fs      = require('fs');
+const fs           = require('fs');
+const crypto        = require('crypto');
+const cookieParser  = require('cookie-parser');
+const { generateToken, setCookie, getToken, tokenFromCookieHeader } = require('./lib/auth');
+const { getDb, getOrCreateProfile, regenerateName, recordScore, getLeaderboard, getProfileRank, effectiveName } = require('./lib/db');
+const names         = require('./lib/names');
 
 const app        = express();
 const httpServer = http.createServer(app);
@@ -17,7 +22,72 @@ const io         = new Server(httpServer, {
   cors: { origin: '*' },
   transports: ['websocket', 'polling']
 });
+app.use(cookieParser());
+app.use(express.json());
+
+// ── Guest profile cookie middleware ──────────────────────────────────────────
+// Must come BEFORE express.static so Set-Cookie is included on static file responses.
+// Creates an opaque 32-byte token on first visit (HttpOnly, SameSite=Lax, 1 year).
+// Token hash is stored server-side; raw token is never persisted.
+app.use((req, res, next) => {
+  let token = getToken(req.cookies);
+  if (!token) {
+    token = generateToken();
+    setCookie(res, token);
+  }
+  req._tcToken = token;
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Simple in-memory rate limiter for rename endpoint (no external dep)
+const _renameTs = new Map();
+const RENAME_COOLDOWN_MS = 5000;
+function renameRateLimiter(req, res, next) {
+  const now = Date.now();
+  const last = _renameTs.get(req._tcToken);
+  if (last && now - last < RENAME_COOLDOWN_MS) {
+    return res.status(429).json({ error: 'Please wait a moment before renaming again.' });
+  }
+  _renameTs.set(req._tcToken, now);
+  if (_renameTs.size > 5000) {
+    for (const [k, v] of _renameTs) { if (now - v > RENAME_COOLDOWN_MS * 10) _renameTs.delete(k); }
+  }
+  next();
+}
+
+// ── Persistence API ───────────────────────────────────────────────────────────
+// GET /api/profile — return this guest's persistent profile
+app.get('/api/profile', (req, res) => {
+  try {
+    const db = getDb();
+    const raw = getOrCreateProfile(db, req._tcToken, names.generate);
+    const { token_hash: _th, ...profile } = raw;
+    const rank = getProfileRank(db, profile.id);
+    res.json({ ...profile, rank, effective_name: effectiveName(raw) });
+  } catch (e) { res.status(500).json({ error: 'Profile unavailable' }); }
+});
+
+// POST /api/profile/rename — regenerate display name (rate-limited)
+app.post('/api/profile/rename', renameRateLimiter, (req, res) => {
+  try {
+    const db = getDb();
+    const raw = getOrCreateProfile(db, req._tcToken, names.generate);
+    const newName = regenerateName(db, raw.id, names.generate);
+    const updated = db.prepare('SELECT * FROM profiles WHERE id = ?').get(raw.id);
+    res.json({ display_name: newName, lifetime_score: updated.lifetime_score, correct_answers: updated.correct_answers, effective_name: newName });
+  } catch (e) { res.status(500).json({ error: 'Rename failed' }); }
+});
+
+// GET /api/leaderboard — all-time top 25
+app.get('/api/leaderboard', (_req, res) => {
+  try {
+    const db = getDb();
+    const board = getLeaderboard(db, 25);
+    res.json({ leaderboard: board.map((p, i) => { const { token_hash: _th, ...safe } = p; return { ...safe, rank: i + 1, effective_name: effectiveName(p) }; }) });
+  } catch (e) { res.status(500).json({ error: 'Leaderboard unavailable' }); }
+});
 
 
 // ── Question loader (production cache: OpenTriviaQA CC BY-SA 4.0) ──────────────
@@ -173,6 +243,7 @@ const circus = {
   idleTimer: null,
   pool: [],
   poolIdx: 0,
+  roundId: null,    // UUID per question — idempotency key for lifetime score events
 };
 
 function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
@@ -222,6 +293,7 @@ function startQuestion() {
   }
   const q = nextQuestion();
   circus.currentQ = q;
+  circus.roundId = crypto.randomUUID();
   circus.questionSentAt = Date.now();
   circus.answers.clear();
   circus.sygChoices.clear();
@@ -289,6 +361,7 @@ function revealRound() {
     && Object.values(tally).filter(v => v > 0).length > 1;
 
   // Score all answerers
+  const _roundEarned = new Map(); // sid → { points, correct } — for lifetime recording
   circus.answers.forEach((a, sid) => {
     const player = circus.players.get(sid);
     if (!player || !player.connected) return;
@@ -307,10 +380,13 @@ function revealRound() {
       if (!player.stats.catWins) player.stats.catWins = {};
       player.stats.catWins[q.category] = (player.stats.catWins[q.category] || 0) + 1;
       circus.initialCorrect.add(sid);
+      _roundEarned.set(sid, { points: earned, correct: true });
       io.to(sid).emit('answer_result', { correct: true, earned, speed, streak, trust, dd });
     } else {
+      const _ddPenalty = player.doubleDown ? -CFG.DD_STAKE : 0;
       if (player.doubleDown) player.score = Math.max(0, (player.score || 0) - CFG.DD_STAKE);
       player.streak = 0;
+      _roundEarned.set(sid, { points: _ddPenalty, correct: false });
       io.to(sid).emit('answer_result', { correct: false, earned: 0 });
     }
     player.doubleDown = false;
@@ -323,6 +399,22 @@ function revealRound() {
     leaderboard: leaderboard(),
     presence: presencePayload(),
   });
+
+  // ── Lifetime score persistence ────────────────────────────────────────────
+  if (circus.roundId) {
+    try {
+      const _db = getDb();
+      for (const [_sid, { points: _pts, correct: _cor }] of _roundEarned) {
+        const _sock = io.sockets.sockets.get(_sid);
+        if (_sock && _sock._tcProfile) {
+          const _new = recordScore(_db, _sock._tcProfile.id, circus.roundId, _pts, _cor);
+          if (_new) _sock._tcProfile = _db.prepare('SELECT * FROM profiles WHERE id = ?').get(_sock._tcProfile.id);
+        }
+      }
+      const _board = getLeaderboard(_db, 10);
+      broadcast('circus_leaderboard', { leaderboard: _board.map((_p, _i) => { const { token_hash: _t, ..._sp } = _p; return { ..._sp, rank: _i + 1, effective_name: effectiveName(_p) }; }) });
+    } catch (_err) { console.error('[persist] score error:', _err.message); }
+  }
 
   if (divided) {
     circus.phase = 'syg';
@@ -372,6 +464,22 @@ function endRound() {
 }
 
 // ── Socket events ─────────────────────────────────────────────────────────────
+
+// Socket.IO middleware — resolve or create guest profile from cookie
+io.use((socket, next) => {
+  try {
+    const header = socket.handshake.headers.cookie || '';
+    const token  = tokenFromCookieHeader(header) || generateToken();
+    const db     = getDb();
+    socket._tcProfile = getOrCreateProfile(db, token, names.generate);
+  } catch (e) {
+    console.error('[persist] socket profile error:', e.message);
+    // Non-fatal — allow connection without persistence
+    socket._tcProfile = null;
+  }
+  next();
+});
+
 io.on('connection', socket => {
 
   // Lightweight presence peek — no player created
@@ -420,6 +528,17 @@ io.on('connection', socket => {
     }
     socket.emit('joined', state);
     broadcast('presence', { players: presencePayload() });
+
+    // Emit persistent profile and all-time leaderboard to this client
+    if (socket._tcProfile) {
+      const { token_hash: _th, ...safePro } = socket._tcProfile;
+      socket.emit('circus_profile', { ...safePro, effective_name: effectiveName(socket._tcProfile) });
+      try {
+        const _db = getDb();
+        const board = getLeaderboard(_db, 10);
+        socket.emit('circus_leaderboard', { leaderboard: board.map((p, i) => { const { token_hash: __th, ...sp } = p; return { ...sp, rank: i + 1, effective_name: effectiveName(p) }; }) });
+      } catch (_) {}
+    }
 
     // Wake idle circus
     if (circus.phase === 'idle') {
