@@ -154,6 +154,7 @@ function earnedTitle(stats) {
   return { title: 'The Analyst', emoji: '📊' };
 }
 
+let QUESTIONS = [];
 // ── Global circus state ───────────────────────────────────────────────────────
 const circus = {
   // phase: idle | question | reveal | syg
