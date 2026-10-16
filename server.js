@@ -138,6 +138,7 @@ function publicIdentity(db, profile, registered) {
 }
 
 app.get('/api/human/config', (req, res) => {
+  res.set('Cache-Control', 'no-store');
   res.json({
     enabled: HUMAN_GATE.enabled,
     siteKey: HUMAN_GATE.enabled ? HUMAN_GATE.siteKey : '',
@@ -210,7 +211,7 @@ app.post('/api/auth/register', requireSameOrigin, requireHuman, async (req, res)
 
 const _fakeSalt = Buffer.alloc(16, 7);
 const _fakeHash = Buffer.alloc(64, 11);
-app.post('/api/auth/login', requireSameOrigin, requireHuman, async (req, res) => {
+app.post('/api/auth/login', requireSameOrigin, async (req, res) => {
   const username = validateUsername(req.body && req.body.username);
   const password = typeof (req.body && req.body.password) === 'string' ? req.body.password : '';
   if (authRateLimited(req, username || 'invalid')) return res.status(429).json({ error: 'Too many attempts. Please try again later.' });
@@ -709,14 +710,9 @@ function endRound() {
 io.use((socket, next) => {
   try {
     const header = socket.handshake.headers.cookie || '';
-    if (HUMAN_GATE.enabled) {
-      const humanToken = cookieValueFromHeader(header, HUMAN_COOKIE);
-      if (!verifyHumanToken(humanToken, HUMAN_GATE.signingSecret)) {
-        const error = new Error('Human verification required');
-        error.data = { code: 'HUMAN_VERIFICATION_REQUIRED' };
-        return next(error);
-      }
-    }
+    const humanToken = cookieValueFromHeader(header, HUMAN_COOKIE);
+    socket.data.humanVerified = !HUMAN_GATE.enabled || verifyHumanToken(humanToken, HUMAN_GATE.signingSecret);
+    socket.data.joined = false;
     const db = getDb();
     const sessionToken = sessionTokenFromCookieHeader(header);
     const sessionProfile = resolveSession(db, sessionToken);
@@ -744,7 +740,13 @@ io.on('connection', socket => {
     socket.emit('presence', { players: presencePayload() });
   });
 
-  socket.on('join', (rawData) => {
+  socket.on('join', (rawData, ack) => {
+    if (!socket.data.humanVerified) {
+      const denial = { ok: false, code: 'HUMAN_VERIFICATION_REQUIRED', error: 'Human verification required.' };
+      socket.emit('join_denied', denial);
+      if (typeof ack === 'function') ack(denial);
+      return;
+    }
     // Name from client is IGNORED — identity comes from the authenticated cookie profile
     if (circus.players.size >= CFG.MAX_PLAYERS) {
       socket.emit('error', { msg: 'The circus is full' });
@@ -781,6 +783,7 @@ io.on('connection', socket => {
       circus.profileSockets.set(profileId, _pSocks);
     }
     socket.data.name = serverName;
+    socket.data.joined = true;
 
     // Build join response with current state (blocker 2: no name from URL)
     const state = {
@@ -820,6 +823,7 @@ io.on('connection', socket => {
 
   socket.on('submit_answer', (rawData, ack) => {
     const respond = payload => { if (typeof ack === 'function') ack(payload); };
+    if (!socket.data.joined) return respond({ ok: false, error: 'Join the circus first.' });
     const data = validateAnswer(rawData);
     if (!data) return respond({ ok: false, error: 'Invalid answer.' });
     if (circus.phase !== 'question') return respond({ ok: false, error: 'That round has ended.' });
@@ -849,6 +853,7 @@ io.on('connection', socket => {
   });
 
   socket.on('double_down', () => {
+    if (!socket.data.joined) return;
     if (circus.phase !== 'question') return;
     const profileId = socket.data.profileId || socket.id;
     const player = circus.players.get(profileId);
@@ -858,6 +863,7 @@ io.on('connection', socket => {
   });
 
   socket.on('stand_ground', (rawData) => {
+    if (!socket.data.joined) return;
     if (circus.phase !== 'syg') return;
     const profileId = socket.data.profileId || socket.id;
     const player = circus.players.get(profileId);
@@ -908,6 +914,7 @@ io.on('connection', socket => {
   socket.on('set_status', (rawData, ack) => {
     const data = validatePlayerStatus(rawData);
     const respond = payload => { if (typeof ack === 'function') ack(payload); };
+    if (!socket.data.joined) return respond({ ok: false, error: 'Join first.' });
     if (!data) return respond({ ok: false, error: 'Invalid status.' });
     const profileId = socket.data.profileId || socket.id;
     const player = circus.players.get(profileId);
@@ -918,6 +925,7 @@ io.on('connection', socket => {
   });
 
   socket.on('reaction', (rawData) => {
+    if (!socket.data.joined) return;
     const data = validateReaction(rawData);
     if (!data) return;
     const profileId = socket.data.profileId || socket.id;

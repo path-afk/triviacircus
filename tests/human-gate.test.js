@@ -59,7 +59,7 @@ async function freePort() {
   return port;
 }
 
-test('enabled gate leaves the landing profile usable but blocks protected APIs and Socket.IO', { timeout: 20000 }, async t => {
+test('enabled gate leaves landing presence usable but blocks unverified gameplay admission', { timeout: 20000 }, async t => {
   const port = await freePort();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trivia-human-gate-'));
   const signingSecret = 'integration-signing-secret-that-is-long-enough';
@@ -84,19 +84,31 @@ test('enabled gate leaves the landing profile usable but blocks protected APIs a
   const configResponse = await fetch(base + '/api/human/config');
   assert.deepEqual(await configResponse.json(), { enabled: true, siteKey: 'test-site', verified: false });
   assert.equal((await fetch(base + '/api/profile')).status, 200);
-  const protectedResponse = await fetch(base + '/api/auth/login', {
+  const protectedResponse = await fetch(base + '/api/auth/register', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username: 'player', password: 'not-a-real-password' }),
   });
   assert.equal(protectedResponse.status, 403);
 
   const blockedSocket = io(base, { transports: ['websocket'], reconnection: false, timeout: 3000 });
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('landing socket did not connect')), 5000);
+    blockedSocket.once('connect', () => { clearTimeout(timer); resolve(); });
+    blockedSocket.once('connect_error', reject);
+  });
+  const peek = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('presence peek timed out')), 5000);
+    blockedSocket.once('presence', data => { clearTimeout(timer); resolve(data); });
+    blockedSocket.emit('peek');
+  });
+  assert.deepEqual(peek.players, []);
   const blockedError = await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('socket was not rejected')), 5000);
-    blockedSocket.once('connect_error', error => { clearTimeout(timer); resolve(error); });
+    const timer = setTimeout(() => reject(new Error('join was not denied')), 5000);
+    blockedSocket.once('join_denied', error => { clearTimeout(timer); resolve(error); });
+    blockedSocket.emit('join', {});
   });
   blockedSocket.close();
-  assert.equal(blockedError.data && blockedError.data.code, 'HUMAN_VERIFICATION_REQUIRED');
+  assert.equal(blockedError.code, 'HUMAN_VERIFICATION_REQUIRED');
 
   const ticket = createHumanToken(signingSecret);
   const allowedProfile = await fetch(base + '/api/profile', { headers: { Cookie: HUMAN_COOKIE + '=' + encodeURIComponent(ticket) } });

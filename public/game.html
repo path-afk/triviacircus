@@ -407,6 +407,7 @@ async function startHumanCheck(){
 }
 socket.on('connect',function(){socket.emit('join',{})});
 socket.on('connect_error',function(err){if(err&&err.data&&err.data.code==='HUMAN_VERIFICATION_REQUIRED'){showHumanGate();G('humanError').textContent='Please complete the ticket check to enter.'}});
+socket.on('join_denied',function(err){if(err&&err.code==='HUMAN_VERIFICATION_REQUIRED'){showHumanGate();G('humanError').textContent='Please complete the ticket check to enter.'}});
 socket.on('joined',function(d){
   NAME=d.name||NAME;updateP(d.presence||[]);if(d.profile)applyProfile(d.profile);else if(NAME)G('myname').textContent=NAME;
   if(d.phase==='question'&&d.currentQuestion){loadQ(d.currentQuestion,d.currentQuestion.timeRemaining)}else show('idle');
