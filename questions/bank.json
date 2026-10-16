@@ -1,0 +1,562 @@
+[
+  {
+    "id": "geo-001",
+    "category": "Geopolitics",
+    "difficulty": 2,
+    "text": "Which country currently holds the largest stock of US Treasury securities outside the United States itself?",
+    "options": {
+      "A": "China",
+      "B": "Japan",
+      "C": "United Kingdom",
+      "D": "Saudi Arabia"
+    },
+    "answer": "B",
+    "explanation": "Japan (~$1.1T) overtook China around 2022. China has been reducing its holdings."
+  },
+  {
+    "id": "geo-002",
+    "category": "Geopolitics",
+    "difficulty": 3,
+    "text": "The Thucydides Trap — the theory that a rising power and an established power are likely to go to war — was coined by which scholar?",
+    "options": {
+      "A": "Joseph Nye",
+      "B": "John Mearsheimer",
+      "C": "Graham Allison",
+      "D": "Samuel Huntington"
+    },
+    "answer": "C",
+    "explanation": "Graham Allison at Harvard coined the term and examined 16 historical cases in 'Destined for War' (2017)."
+  },
+  {
+    "id": "geo-003",
+    "category": "Geopolitics",
+    "difficulty": 2,
+    "text": "Under UNCLOS, the Permanent Court of Arbitration ruled in 2016 that China's claims in the South China Sea were invalid. What was China's response?",
+    "options": {
+      "A": "It accepted the ruling and withdrew claims",
+      "B": "It ignored and rejected the ruling as illegitimate",
+      "C": "It appealed to the UN Security Council",
+      "D": "It filed a counter-claim at the ICJ"
+    },
+    "answer": "B",
+    "explanation": "China declared the ruling 'null and void' and has continued its activities in the region."
+  },
+  {
+    "id": "geo-004",
+    "category": "Geopolitics",
+    "difficulty": 2,
+    "text": "NATO's Article 5 collective defence clause has been formally invoked exactly once. When?",
+    "options": {
+      "A": "After the 2005 London bombings",
+      "B": "After the 2004 Madrid bombings",
+      "C": "After 9/11 in 2001",
+      "D": "It has never been formally invoked"
+    },
+    "answer": "C",
+    "explanation": "Article 5 was invoked on 12 September 2001, the day after the 9/11 attacks."
+  },
+  {
+    "id": "geo-005",
+    "category": "Geopolitics",
+    "difficulty": 3,
+    "text": "China's Belt and Road Initiative originally had a different name. What was it?",
+    "options": {
+      "A": "One China Policy",
+      "B": "One Belt One Road (OBOR)",
+      "C": "Silk Road Economic Belt only",
+      "D": "Asian Infrastructure Initiative"
+    },
+    "answer": "B",
+    "explanation": "It was launched as 'One Belt One Road' (OBOR) in 2013 before being rebranded BRI."
+  },
+  {
+    "id": "geo-006",
+    "category": "Geopolitics",
+    "difficulty": 3,
+    "text": "Which five countries hold permanent veto power on the UN Security Council?",
+    "options": {
+      "A": "US, UK, France, Germany, Russia",
+      "B": "US, UK, France, Russia, China",
+      "C": "US, UK, France, Russia, Japan",
+      "D": "US, UK, China, India, Russia"
+    },
+    "answer": "B",
+    "explanation": "The P5 are the US, UK, France, Russia (USSR seat), and China (PRC took ROC seat in 1971)."
+  },
+  {
+    "id": "geo-007",
+    "category": "Geopolitics",
+    "difficulty": 2,
+    "text": "The 1916 Sykes-Picot Agreement secretly divided which region between British and French spheres of influence?",
+    "options": {
+      "A": "North Africa",
+      "B": "Central Asia",
+      "C": "The Middle East",
+      "D": "The Balkans"
+    },
+    "answer": "C",
+    "explanation": "Britain and France carved up the Ottoman Middle East, drawing borders that still define the region today."
+  },
+  {
+    "id": "geo-008",
+    "category": "Geopolitics",
+    "difficulty": 3,
+    "text": "Which sovereign wealth fund is the world's largest by assets under management?",
+    "options": {
+      "A": "Abu Dhabi Investment Authority",
+      "B": "Kuwait Investment Authority",
+      "C": "China Investment Corporation",
+      "D": "Norway's Government Pension Fund Global"
+    },
+    "answer": "D",
+    "explanation": "Norway's GPFG (~$1.6T) is the world's largest SWF, owning roughly 1.5% of all global equities."
+  },
+  {
+    "id": "mkt-001",
+    "category": "Markets & Finance",
+    "difficulty": 2,
+    "text": "Which central bank was the first to implement a sustained negative interest rate policy?",
+    "options": {
+      "A": "European Central Bank",
+      "B": "Bank of Japan",
+      "C": "Swiss National Bank",
+      "D": "Sweden's Riksbank"
+    },
+    "answer": "D",
+    "explanation": "The Riksbank cut its repo rate to -0.25% in February 2015 and sustained it; the ECB followed months later."
+  },
+  {
+    "id": "mkt-002",
+    "category": "Markets & Finance",
+    "difficulty": 2,
+    "text": "The 2008 financial crisis spread globally primarily because banks held what instruments rated AAA that were backed by subprime mortgages?",
+    "options": {
+      "A": "Credit Default Swaps",
+      "B": "Collateralised Debt Obligations (CDOs)",
+      "C": "Mortgage-Backed Securities directly",
+      "D": "Interest Rate Swaps"
+    },
+    "answer": "B",
+    "explanation": "CDO tranching gave AAA ratings to subprime-backed securities; banks worldwide held them, spreading the contagion."
+  },
+  {
+    "id": "mkt-003",
+    "category": "Markets & Finance",
+    "difficulty": 3,
+    "text": "The Bretton Woods system collapsed in 1971. What specific action by Nixon caused the immediate break?",
+    "options": {
+      "A": "Devaluing the dollar by 50%",
+      "B": "Imposing a 10% import surcharge",
+      "C": "Suspending dollar convertibility to gold",
+      "D": "Withdrawing from the IMF"
+    },
+    "answer": "C",
+    "explanation": "Nixon's 'gold window' closure — ending dollar-gold convertibility at $35/oz — ended the fixed exchange rate system."
+  },
+  {
+    "id": "mkt-004",
+    "category": "Markets & Finance",
+    "difficulty": 2,
+    "text": "What does an inverted yield curve (short rates above long rates) historically signal?",
+    "options": {
+      "A": "Accelerating economic growth",
+      "B": "Imminent hyperinflation",
+      "C": "Elevated recession probability",
+      "D": "Currency devaluation"
+    },
+    "answer": "C",
+    "explanation": "An inverted yield curve has preceded every US recession since 1955, typically by 12–18 months."
+  },
+  {
+    "id": "mkt-005",
+    "category": "Markets & Finance",
+    "difficulty": 3,
+    "text": "In a currency carry trade, an investor profits by doing what?",
+    "options": {
+      "A": "Buying a currency before central bank intervention",
+      "B": "Borrowing in a low-interest currency and investing in a high-interest currency",
+      "C": "Shorting a currency during a current account deficit",
+      "D": "Hedging FX exposure with forwards"
+    },
+    "answer": "B",
+    "explanation": "The carry trade exploits interest rate differentials; it unwinds violently when risk sentiment turns."
+  },
+  {
+    "id": "mkt-006",
+    "category": "Markets & Finance",
+    "difficulty": 3,
+    "text": "George Akerlof's 'The Market for Lemons' (1970), which won a Nobel Prize, introduced which concept?",
+    "options": {
+      "A": "Moral hazard",
+      "B": "Adverse selection from information asymmetry",
+      "C": "The efficient market hypothesis",
+      "D": "Rational expectations"
+    },
+    "answer": "B",
+    "explanation": "Akerlof showed that information asymmetry causes adverse selection — good cars exit the market, only lemons remain."
+  },
+  {
+    "id": "mkt-007",
+    "category": "Markets & Finance",
+    "difficulty": 2,
+    "text": "Quantitative easing (QE) primarily affects the economy through which mechanism?",
+    "options": {
+      "A": "Directly printing cash for consumers",
+      "B": "Lowering bank reserve requirements",
+      "C": "Central bank asset purchases that lower long-term yields and push investors into risk assets",
+      "D": "Increasing government spending directly"
+    },
+    "answer": "C",
+    "explanation": "QE compresses long yields by buying bonds, pushing investors toward equities and credit, and signalling low rates ahead."
+  },
+  {
+    "id": "mkt-008",
+    "category": "Markets & Finance",
+    "difficulty": 3,
+    "text": "The Black-Scholes options pricing model assumes which of the following?",
+    "options": {
+      "A": "Asset prices follow fat-tailed distributions",
+      "B": "Volatility changes over time (stochastic vol)",
+      "C": "Asset prices follow geometric Brownian motion with constant volatility",
+      "D": "Markets are illiquid and discrete"
+    },
+    "answer": "C",
+    "explanation": "Black-Scholes assumes log-normal prices, constant volatility, and continuous trading — all simplifications reality violates."
+  },
+  {
+    "id": "tec-001",
+    "category": "Technology",
+    "difficulty": 2,
+    "text": "Rust guarantees memory safety without a garbage collector through which compile-time system?",
+    "options": {
+      "A": "Reference counting at runtime",
+      "B": "The ownership and borrow checker",
+      "C": "Automatic null checking",
+      "D": "Stack-only allocation"
+    },
+    "answer": "B",
+    "explanation": "Rust's ownership rules and borrow checker enforce that each value has one owner; borrows are checked at compile time."
+  },
+  {
+    "id": "tec-002",
+    "category": "Technology",
+    "difficulty": 3,
+    "text": "A Byzantine fault-tolerant system can operate correctly even if some nodes do what?",
+    "options": {
+      "A": "Crash silently",
+      "B": "Lose network connectivity",
+      "C": "Send arbitrary or maliciously incorrect messages",
+      "D": "Reboot and rejoin"
+    },
+    "answer": "C",
+    "explanation": "Byzantine faults include arbitrary/malicious behavior, not just crashes. BFT consensus (e.g., PBFT) tolerates up to f failures in 3f+1 nodes."
+  },
+  {
+    "id": "tec-003",
+    "category": "Technology",
+    "difficulty": 2,
+    "text": "The CAP theorem states a distributed system cannot simultaneously guarantee Consistency, Availability, and what third property?",
+    "options": {
+      "A": "Performance",
+      "B": "Partition Tolerance",
+      "C": "Persistence",
+      "D": "Privacy"
+    },
+    "answer": "B",
+    "explanation": "Eric Brewer's CAP theorem: in a network partition, a system must choose between consistency and availability."
+  },
+  {
+    "id": "tec-004",
+    "category": "Technology",
+    "difficulty": 2,
+    "text": "What is the key difference between TCP and UDP?",
+    "options": {
+      "A": "TCP is faster; UDP is slower",
+      "B": "TCP guarantees ordered, reliable delivery; UDP does not",
+      "C": "UDP is encrypted; TCP is not",
+      "D": "TCP is for video; UDP is for text"
+    },
+    "answer": "B",
+    "explanation": "TCP handshakes, acknowledges, and retransmits. UDP is fire-and-forget — lower latency, no delivery guarantee."
+  },
+  {
+    "id": "tec-005",
+    "category": "Technology",
+    "difficulty": 3,
+    "text": "Public key cryptography (RSA) relies on the computational difficulty of which mathematical problem?",
+    "options": {
+      "A": "Solving large systems of linear equations",
+      "B": "Computing discrete logarithms in elliptic curves",
+      "C": "Factoring the product of two large prime numbers",
+      "D": "Inverting a hash function"
+    },
+    "answer": "C",
+    "explanation": "RSA security depends on the fact that multiplying large primes is easy; factoring their product is computationally infeasible."
+  },
+  {
+    "id": "tec-006",
+    "category": "Technology",
+    "difficulty": 3,
+    "text": "The 'attention mechanism' in transformer models (the basis of GPT, BERT etc.) does what?",
+    "options": {
+      "A": "Filters irrelevant tokens with a threshold",
+      "B": "Computes weighted relationships between all token pairs in a sequence",
+      "C": "Applies convolutional filters across token windows",
+      "D": "Uses recurrence to propagate state"
+    },
+    "answer": "B",
+    "explanation": "Self-attention scores every token's relationship with every other token, enabling long-range dependencies without recurrence."
+  },
+  {
+    "id": "sci-001",
+    "category": "Science",
+    "difficulty": 2,
+    "text": "Which misfolded protein is central to the propagation of Parkinson's disease between neurons?",
+    "options": {
+      "A": "Tau",
+      "B": "Amyloid-beta",
+      "C": "Alpha-synuclein",
+      "D": "TDP-43"
+    },
+    "answer": "C",
+    "explanation": "Alpha-synuclein aggregates into Lewy bodies and can spread prion-like between neurons."
+  },
+  {
+    "id": "sci-002",
+    "category": "Science",
+    "difficulty": 2,
+    "text": "Why does the James Webb Space Telescope primarily observe in infrared rather than visible light?",
+    "options": {
+      "A": "Infrared passes through Earth's atmosphere more easily",
+      "B": "Distant objects are redshifted into infrared, and infrared penetrates dust",
+      "C": "Visible light sensors are too expensive",
+      "D": "Infrared has higher resolution than visible light"
+    },
+    "answer": "B",
+    "explanation": "Cosmological redshift moves ancient starlight into infrared; infrared also pierces dust clouds that block visible light."
+  },
+  {
+    "id": "sci-003",
+    "category": "Science",
+    "difficulty": 2,
+    "text": "CRISPR-Cas9 gene editing works by using the Cas9 protein as what?",
+    "options": {
+      "A": "A viral vector for gene delivery",
+      "B": "A programmable RNA polymerase",
+      "C": "A molecular scissor guided by RNA to cut specific DNA sequences",
+      "D": "A repair template for homologous recombination"
+    },
+    "answer": "C",
+    "explanation": "Guide RNA directs Cas9 to a specific DNA sequence where it makes a double-strand break, allowing edits."
+  },
+  {
+    "id": "sci-004",
+    "category": "Science",
+    "difficulty": 2,
+    "text": "mRNA vaccines (like Pfizer's COVID-19 vaccine) work by doing what inside your cells?",
+    "options": {
+      "A": "Injecting a weakened virus directly",
+      "B": "Inserting viral DNA into your genome",
+      "C": "Instructing ribosomes to produce a viral protein that triggers an immune response",
+      "D": "Delivering pre-formed antibodies"
+    },
+    "answer": "C",
+    "explanation": "mRNA is translated by ribosomes into the spike protein; the immune system learns to recognise it without any live virus."
+  },
+  {
+    "id": "sci-005",
+    "category": "Science",
+    "difficulty": 3,
+    "text": "Why does quantum entanglement NOT allow faster-than-light communication?",
+    "options": {
+      "A": "Entangled particles are always too far apart",
+      "B": "Measuring one particle gives a random result — you cannot control what it shows",
+      "C": "The effect only lasts nanoseconds",
+      "D": "Only photons can be entangled, and photons travel at light speed"
+    },
+    "answer": "B",
+    "explanation": "Measurement outcomes are random. You can't encode information in a random result, so no signal is transmitted."
+  },
+  {
+    "id": "sci-006",
+    "category": "Science",
+    "difficulty": 3,
+    "text": "Dark matter has not been directly detected despite strong indirect evidence. Which of the following is NOT a proposed detection method?",
+    "options": {
+      "A": "Looking for recoil of atomic nuclei in underground detectors",
+      "B": "Observing gamma-ray annihilation signatures",
+      "C": "Measuring gravitational lensing anomalies",
+      "D": "Detecting dark matter radio emissions with standard antennas"
+    },
+    "answer": "D",
+    "explanation": "Direct detection (nuclear recoil), indirect detection (annihilation products), and gravitational methods are all serious approaches. Radio emission is not a standard proposed method."
+  },
+  {
+    "id": "his-001",
+    "category": "History",
+    "difficulty": 2,
+    "text": "The 1973 Arab oil embargo was triggered by US support for which country in which conflict?",
+    "options": {
+      "A": "Israel in the Yom Kippur War",
+      "B": "Iran in the Iran-Iraq War",
+      "C": "Egypt in the Six-Day War",
+      "D": "Kuwait in the Gulf War"
+    },
+    "answer": "A",
+    "explanation": "OAPEC imposed the embargo after the US resupplied Israel during the October 1973 Yom Kippur (Ramadan) War."
+  },
+  {
+    "id": "his-002",
+    "category": "History",
+    "difficulty": 2,
+    "text": "Which article of the Treaty of Versailles assigned sole war guilt to Germany, enabling massive reparations?",
+    "options": {
+      "A": "Article 48",
+      "B": "Article 231",
+      "C": "Article 14",
+      "D": "Article 116"
+    },
+    "answer": "B",
+    "explanation": "Article 231 — the 'war guilt clause' — was the legal basis for ~132 billion gold marks in reparations."
+  },
+  {
+    "id": "his-003",
+    "category": "History",
+    "difficulty": 2,
+    "text": "The Cuban Missile Crisis (1962) ended when the Soviets agreed to remove missiles from Cuba in exchange for what?",
+    "options": {
+      "A": "The US paying reparations to Cuba",
+      "B": "The US publicly pledging not to invade Cuba and secretly removing Jupiter missiles from Turkey",
+      "C": "Cuba joining the Warsaw Pact formally",
+      "D": "The US lifting its trade embargo on Cuba"
+    },
+    "answer": "B",
+    "explanation": "The public deal was a US non-invasion pledge; the secret concession was removing US Jupiter missiles from Turkey."
+  },
+  {
+    "id": "his-004",
+    "category": "History",
+    "difficulty": 3,
+    "text": "The Marshall Plan (1948) had a primary strategic goal beyond economic recovery. What was it?",
+    "options": {
+      "A": "Rebuilding the British Empire",
+      "B": "Preventing the spread of communism by stabilising Western European democracies",
+      "C": "Creating a common European currency",
+      "D": "Establishing US military bases across Europe"
+    },
+    "answer": "B",
+    "explanation": "Truman and Marshall explicitly designed the plan to counter Soviet influence by making capitalism visibly succeed in Western Europe."
+  },
+  {
+    "id": "his-005",
+    "category": "History",
+    "difficulty": 3,
+    "text": "The Nixon Shock of 1971 ended the Bretton Woods system. Which country had been putting the most pressure on US gold reserves by demanding redemption?",
+    "options": {
+      "A": "West Germany",
+      "B": "Japan",
+      "C": "France",
+      "D": "United Kingdom"
+    },
+    "answer": "C",
+    "explanation": "De Gaulle's France was famously converting dollar reserves to gold, sailing ships to collect it — accelerating the crisis."
+  },
+  {
+    "id": "his-006",
+    "category": "History",
+    "difficulty": 2,
+    "text": "The Rwandan genocide of 1994 was primarily carried out by Hutu extremists against which group?",
+    "options": {
+      "A": "Twa",
+      "B": "Tutsi",
+      "C": "Bantu",
+      "D": "Luba"
+    },
+    "answer": "B",
+    "explanation": "Approximately 800,000 Tutsi and moderate Hutu were killed in roughly 100 days in one of history's fastest genocides."
+  },
+  {
+    "id": "cul-001",
+    "category": "Culture & Ideas",
+    "difficulty": 1,
+    "text": "Socrates said 'The unexamined life is not worth living.' In what context?",
+    "options": {
+      "A": "In his philosophical dialogues with Plato",
+      "B": "At his trial when offered exile instead of death",
+      "C": "In a letter to Aristotle",
+      "D": "In his book 'The Republic'"
+    },
+    "answer": "B",
+    "explanation": "He said it at his trial in 399 BC, choosing death over abandoning philosophy — recorded in Plato's Apology."
+  },
+  {
+    "id": "cul-002",
+    "category": "Culture & Ideas",
+    "difficulty": 2,
+    "text": "John Rawls's 'veil of ignorance' thought experiment asks us to design a just society under what condition?",
+    "options": {
+      "A": "Knowing your own talents but not others'",
+      "B": "Not knowing your place in society, class, or natural abilities",
+      "C": "Assuming everyone is equal in ability",
+      "D": "Designing for the worst-off member only"
+    },
+    "answer": "B",
+    "explanation": "The veil of ignorance strips away knowledge of your own position, forcing principles you'd accept from any position."
+  },
+  {
+    "id": "cul-003",
+    "category": "Culture & Ideas",
+    "difficulty": 2,
+    "text": "Marshall McLuhan's phrase 'the medium is the message' means what?",
+    "options": {
+      "A": "The content of media determines its cultural impact",
+      "B": "The form/channel of communication shapes society more than its content",
+      "C": "Television is more powerful than radio",
+      "D": "Messages are always distorted in transmission"
+    },
+    "answer": "B",
+    "explanation": "McLuhan argued that electric light — contentless — transforms society more profoundly than anything transmitted through it."
+  },
+  {
+    "id": "cul-004",
+    "category": "Culture & Ideas",
+    "difficulty": 2,
+    "text": "The Dunning-Kruger effect describes the tendency of people with limited knowledge to do what?",
+    "options": {
+      "A": "Underestimate the difficulty of tasks",
+      "B": "Overestimate their own competence",
+      "C": "Avoid complex tasks entirely",
+      "D": "Copy experts without understanding"
+    },
+    "answer": "B",
+    "explanation": "Kruger and Dunning (1999) showed that incompetent people lack the metacognitive ability to recognise their own incompetence."
+  },
+  {
+    "id": "cul-005",
+    "category": "Culture & Ideas",
+    "difficulty": 2,
+    "text": "The Overton window describes what in political theory?",
+    "options": {
+      "A": "The gap between public opinion and policy outcomes",
+      "B": "The range of policies currently acceptable to the mainstream public",
+      "C": "The time lag between elections and policy change",
+      "D": "Media bias toward centrist positions"
+    },
+    "answer": "B",
+    "explanation": "Joseph Overton's concept: only policies inside this window are politically viable; activists shift the window to make new ideas acceptable."
+  },
+  {
+    "id": "cul-006",
+    "category": "Culture & Ideas",
+    "difficulty": 3,
+    "text": "Which philosopher argued that we cannot step into the same river twice — meaning reality is constant flux?",
+    "options": {
+      "A": "Parmenides",
+      "B": "Pythagoras",
+      "C": "Heraclitus",
+      "D": "Democritus"
+    },
+    "answer": "C",
+    "explanation": "Heraclitus (~500 BC): 'You cannot step into the same river twice, for new waters are always flowing.' Being is becoming."
+  }
+]

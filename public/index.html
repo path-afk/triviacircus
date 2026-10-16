@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trivia Circus — Prove everybody wrong</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--navy:#0d1b2a;--navy2:#112236;--navy3:#1a3a5c;--teal:#00d4aa;--teal2:#00b894;--white:#f0f4f8;--muted:#7a9bb5;--warn:#ff6b6b}
+body{background:var(--navy);color:var(--white);font-family:'Inter',sans-serif;min-height:100vh;overflow-x:hidden}
+.stars{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.star{position:absolute;width:2px;height:2px;background:rgba(255,255,255,0.4);border-radius:50%;animation:twinkle 3s infinite alternate}
+@keyframes twinkle{0%{opacity:0.2}100%{opacity:0.8}}
+nav{position:relative;z-index:10;display:flex;justify-content:space-between;align-items:center;padding:1.5rem 2rem;border-bottom:1px solid rgba(0,212,170,0.1)}
+.logo{font-size:1.4rem;font-weight:900;color:var(--teal);letter-spacing:-0.5px}
+.logo span{color:var(--white)}
+.nav-links a{color:var(--muted);text-decoration:none;margin-left:1.5rem;font-size:0.9rem;transition:color 0.2s}
+.nav-links a:hover{color:var(--teal)}
+.hero{position:relative;z-index:10;text-align:center;padding:5rem 2rem 3rem}
+.hero h1{font-size:clamp(2.5rem,7vw,5rem);font-weight:900;line-height:1.05;letter-spacing:-2px;margin-bottom:1rem}
+.hero h1 .accent{color:var(--teal)}
+.hero p{font-size:1.15rem;color:var(--muted);max-width:480px;margin:0 auto 2.5rem;line-height:1.6}
+.categories{display:flex;flex-wrap:wrap;justify-content:center;gap:0.5rem;margin-bottom:3rem}
+.cat-badge{background:rgba(0,212,170,0.1);border:1px solid rgba(0,212,170,0.25);color:var(--teal);padding:0.35rem 0.85rem;border-radius:999px;font-size:0.78rem;font-weight:600;letter-spacing:0.3px}
+.card{background:rgba(17,34,54,0.95);border:1px solid rgba(0,212,170,0.2);border-radius:16px;padding:2.5rem;max-width:440px;margin:0 auto;backdrop-filter:blur(10px);position:relative;z-index:10;box-shadow:0 20px 60px rgba(0,0,0,0.4)}
+.card h2{font-size:1.3rem;font-weight:700;margin-bottom:1.5rem;text-align:center}
+.tabs{display:flex;background:rgba(13,27,42,0.8);border-radius:8px;padding:4px;margin-bottom:1.5rem}
+.tab{flex:1;padding:0.6rem;text-align:center;border-radius:6px;cursor:pointer;font-size:0.9rem;font-weight:600;color:var(--muted);transition:all 0.2s}
+.tab.active{background:var(--teal);color:var(--navy)}
+.form-group{margin-bottom:1rem}
+label{display:block;font-size:0.8rem;font-weight:600;color:var(--muted);margin-bottom:0.4rem;letter-spacing:0.5px;text-transform:uppercase}
+input{width:100%;background:rgba(13,27,42,0.8);border:1.5px solid rgba(0,212,170,0.2);border-radius:8px;padding:0.75rem 1rem;color:var(--white);font-size:1rem;font-family:'Inter',sans-serif;transition:border-color 0.2s;outline:none}
+input:focus{border-color:var(--teal)}
+input::placeholder{color:var(--muted)}
+.btn{width:100%;padding:0.9rem;border-radius:8px;border:none;font-size:1rem;font-weight:700;cursor:pointer;transition:all 0.2s;letter-spacing:0.3px;margin-top:0.5rem}
+.btn-primary{background:var(--teal);color:var(--navy)}
+.btn-primary:hover{background:var(--teal2);transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,212,170,0.3)}
+.btn-primary:active{transform:translateY(0)}
+.hint{text-align:center;font-size:0.8rem;color:var(--muted);margin-top:1rem}
+.how{position:relative;z-index:10;max-width:700px;margin:3rem auto;padding:0 2rem}
+.how h2{text-align:center;font-size:1.5rem;font-weight:800;margin-bottom:2rem;color:var(--white)}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem}
+.step{background:rgba(17,34,54,0.6);border:1px solid rgba(0,212,170,0.15);border-radius:12px;padding:1.5rem;text-align:center}
+.step-num{width:2.5rem;height:2.5rem;background:var(--teal);color:var(--navy);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1rem;margin:0 auto 0.75rem}
+.step h3{font-size:0.95rem;font-weight:700;margin-bottom:0.4rem}
+.step p{font-size:0.82rem;color:var(--muted);line-height:1.5}
+.error{color:var(--warn);font-size:0.85rem;margin-top:0.5rem;text-align:center;display:none}
+footer{text-align:center;padding:2rem;color:var(--muted);font-size:0.8rem;position:relative;z-index:10;border-top:1px solid rgba(255,255,255,0.05);margin-top:3rem}
+</style>
+</head>
+<body>
+<div class="stars" id="stars"></div>
+<nav>
+  <div class="logo">🎪 Trivia<span> Circus</span></div>
+  <div class="nav-links"><a href="#">Leaderboard</a><a href="#">How to Play</a></div>
+</nav>
+<div class="hero">
+  <h1>Step right up..<br><span class="accent">Only one winner leaves the ring.</span></h1>
+  <p>Real-time multiplayer trivia where accuracy wins, the room has a personality, and every game tells a story.</p>
+  <div class="categories">
+    <span class="cat-badge">🌍 Geopolitics</span>
+    <span class="cat-badge">📈 Markets & Finance</span>
+    <span class="cat-badge">⚙️ Technology</span>
+    <span class="cat-badge">🔬 Science</span>
+    <span class="cat-badge">📜 History</span>
+    <span class="cat-badge">💡 Culture & Ideas</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Ready to prove it?</h2>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('create')">Create Room</div>
+    <div class="tab" onclick="switchTab('join')">Join Room</div>
+  </div>
+  <div id="tab-create">
+    <div class="form-group"><label>Your Pseudonym</label><input id="create-name" placeholder="e.g. TheDiplomat" maxlength="20"></div>
+    <button class="btn btn-primary" onclick="createRoom()">Create Room & Invite Friends</button>
+  </div>
+  <div id="tab-join" style="display:none">
+    <div class="form-group"><label>Your Pseudonym</label><input id="join-name" placeholder="e.g. TheGuesser" maxlength="20"></div>
+    <div class="form-group"><label>Room Code</label><input id="join-code" placeholder="e.g. BRAINS-7734" maxlength="20" style="text-transform:uppercase"></div>
+    <button class="btn btn-primary" onclick="joinRoom()">Join Room</button>
+  </div>
+  <div class="error" id="error-msg"></div>
+  <p class="hint">No account required. Your pseudonym is your identity.</p>
+</div>
+
+<div class="how">
+  <h2>How it works</h2>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><h3>Pick a Pseudonym</h3><p>No real names. No accounts required. Just a handle that's yours.</p></div>
+    <div class="step"><div class="step-num">2</div><h3>Everyone Answers</h3><p>All players answer simultaneously. No reflexes required — accuracy wins.</p></div>
+    <div class="step"><div class="step-num">3</div><h3>The Room Reveals</h3><p>See how the room split. Stand your ground or switch. Earn your title.</p></div>
+  </div>
+</div>
+
+<footer>Trivia Circus &copy; 2024 — Analyst-level trivia for people who actually know things.</footer>
+
+<script>
+function makeStar(){const s=document.createElement('div');s.className='star';s.style.cssText='left:'+Math.random()*100+'%;top:'+Math.random()*100+'%;animation-delay:'+Math.random()*3+'s;animation-duration:'+(2+Math.random()*3)+'s';document.getElementById('stars').appendChild(s)}
+for(let i=0;i<60;i++)makeStar();
+
+function switchTab(t){
+  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',i===(t==='create'?0:1)));
+  document.getElementById('tab-create').style.display=t==='create'?'':'none';
+  document.getElementById('tab-join').style.display=t==='join'?'':'none';
+}
+function showError(msg){const e=document.getElementById('error-msg');e.textContent=msg;e.style.display='block';setTimeout(()=>e.style.display='none',3000)}
+function createRoom(){
+  const name=document.getElementById('create-name').value.trim();
+  if(!name){showError('Enter a pseudonym first');return}
+  const code='BRAIN-'+Math.floor(1000+Math.random()*9000);
+  location.href='game.html?room='+code+'&name='+encodeURIComponent(name)+'&host=1';
+}
+function joinRoom(){
+  const name=document.getElementById('join-name').value.trim();
+  const code=document.getElementById('join-code').value.trim().toUpperCase();
+  if(!name){showError('Enter a pseudonym');return}
+  if(!code){showError('Enter a room code');return}
+  location.href='game.html?room='+code+'&name='+encodeURIComponent(name);
+}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'){const t=document.querySelector('.tab.active').textContent.trim();t.includes('Create')?createRoom():joinRoom()}})
+</script>
+</body>
+</html>
