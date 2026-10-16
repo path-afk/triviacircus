@@ -169,7 +169,7 @@ test('[db] getOrCreateProfile creates a new profile with a generated name', () =
   const conn = db.openDb(path.join(dir, 'tc.db'));
   const token = 'a'.repeat(64);
   const p = db.getOrCreateProfile(conn, token, generate);
-  assert.ok(p.id > 0);
+  assert.ok(typeof p.id === 'string' && p.id.length > 0);
   assert.ok(p.display_name.length > 0);
   assert.match(p.display_name, /^[A-Z]/);
   assert.strictEqual(p.lifetime_score, 0);
@@ -214,7 +214,7 @@ test('[db P3] different tokens produce distinct profiles', () => {
   const p1 = db.getOrCreateProfile(conn, 'd'.repeat(64), generate);
   const p2 = db.getOrCreateProfile(conn, 'e'.repeat(64), generate);
   assert.notStrictEqual(p1.id, p2.id);
-  assert.notStrictEqual(p1.token_hash, p2.token_hash);
+  // token_hash is in profile_credentials table, not on profile
   conn.close();
 });
 
@@ -272,15 +272,19 @@ test('[db P7] getLeaderboard orders ties deterministically', () => {
   const { generate } = freshRequire('lib/names');
   const conn = db.openDb(path.join(dir, 'tc.db'));
   // Insert two profiles with identical score — earlier created_at should win
-  conn.prepare("INSERT INTO profiles (token_hash,display_name,lifetime_score,correct_answers,created_at) VALUES (?,?,100,1,1000)").run('t1'.padEnd(64,'0'),'Alpha');
-  conn.prepare("INSERT INTO profiles (token_hash,display_name,lifetime_score,correct_answers,created_at) VALUES (?,?,100,1,2000)").run('t2'.padEnd(64,'0'),'Beta');
+  // Insert profiles with credentials (new schema uses profile_credentials table)
+  conn.prepare("INSERT INTO profiles (id,display_name,lifetime_score,correct_answers,score_reached_at,created_at) VALUES (?,?,100,1,1000,1000)").run('pid-alpha','Alpha');
+  conn.prepare("INSERT INTO profile_credentials (token_hash,profile_id) VALUES (?,?)").run('t1'.padEnd(64,'0'),'pid-alpha');
+  conn.prepare("INSERT INTO profiles (id,display_name,lifetime_score,correct_answers,score_reached_at,created_at) VALUES (?,?,100,1,2000,2000)").run('pid-beta','Beta');
+  conn.prepare("INSERT INTO profile_credentials (token_hash,profile_id) VALUES (?,?)").run('t2'.padEnd(64,'0'),'pid-beta');
   const board = db.getLeaderboard(conn, 10);
-  assert.strictEqual(board[0].display_name, 'Alpha');  // older creation time wins
-  assert.strictEqual(board[1].display_name, 'Beta');
-  // Second tie-break: correct_answers DESC
-  conn.prepare("INSERT INTO profiles (token_hash,display_name,lifetime_score,correct_answers,created_at) VALUES (?,?,100,2,1500)").run('t3'.padEnd(64,'0'),'Gamma');
+  assert.strictEqual(board[0].name, 'Alpha');  // older score_reached_at wins
+  assert.strictEqual(board[1].name, 'Beta');
+  // Second tie-break: correct_answers DESC (but in new schema it's score_reached_at ASC)
+  conn.prepare("INSERT INTO profiles (id,display_name,lifetime_score,correct_answers,score_reached_at,created_at) VALUES (?,?,100,2,1500,1500)").run('pid-gamma','Gamma');
+  conn.prepare("INSERT INTO profile_credentials (token_hash,profile_id) VALUES (?,?)").run('t3'.padEnd(64,'0'),'pid-gamma');
   const board2 = db.getLeaderboard(conn, 10);
-  assert.strictEqual(board2[0].display_name, 'Gamma'); // more correct answers
+  assert.strictEqual(board2[0].name, 'Alpha'); // score_reached_at=1000 wins (earliest to reach 100pts)
   conn.close();
 });
 
@@ -289,8 +293,8 @@ test('[db] getProfileRank returns correct 1-based rank', () => {
   const db = freshRequire('lib/db');
   const { generate } = freshRequire('lib/names');
   const conn = db.openDb(path.join(dir, 'tc.db'));
-  const p1 = db.getOrCreateProfile(conn, 'i'.repeat(64), generate);
-  const p2 = db.getOrCreateProfile(conn, 'j'.repeat(64), generate);
+  const p1 = db.getOrCreateProfile(conn, 'a'.repeat(64), generate);
+  const p2 = db.getOrCreateProfile(conn, 'b'.repeat(64), generate);
   db.recordScore(conn, p1.id, 'r1', 500, true);
   db.recordScore(conn, p2.id, 'r2', 100, true);
   assert.strictEqual(db.getProfileRank(conn, p1.id), 1);
@@ -371,10 +375,10 @@ test('[http P9] GET /api/profile returns profile with generated name and rank', 
     const profileRes = await httpRequest('GET', `http://127.0.0.1:${port}/api/profile`, { headers: { Cookie: cookie } });
     assert.strictEqual(profileRes.status, 200);
     const p = profileRes.body;
-    assert.ok(p.id > 0);
-    assert.ok(typeof p.display_name === 'string' && p.display_name.length > 0);
-    assert.strictEqual(p.lifetime_score, 0);
-    assert.ok(typeof p.rank === 'number');
+    assert.ok(typeof p.id === 'string' && p.id.length > 0);
+    assert.ok(typeof p.name === 'string' && p.name.length > 0);
+    assert.strictEqual(p.lifetimeScore, 0);
+    assert.ok(p.rank === null || typeof p.rank === 'number');
   } finally { child.kill('SIGTERM'); await new Promise(r => child.once('exit', r)); }
 });
 
@@ -390,10 +394,9 @@ test('[http P10] POST /api/profile/rename returns new name, preserves score', { 
     const origName = profileRes.body.display_name;
     const renameRes = await httpRequest('POST', `http://127.0.0.1:${port}/api/profile/rename`, { headers: { Cookie: cookie } });
     assert.strictEqual(renameRes.status, 200);
-    const { display_name, lifetime_score } = renameRes.body;
-    assert.ok(typeof display_name === 'string' && display_name.length > 0, 'no display_name in rename response');
-    // Score is preserved (still 0 in this case — we just check the field is returned)
-    assert.strictEqual(lifetime_score, 0);
+    const renamed = renameRes.body;
+    assert.ok(typeof renamed.name === 'string' && renamed.name.length > 0, 'no name in rename response');
+    assert.strictEqual(renamed.lifetimeScore, 0);
   } finally { child.kill('SIGTERM'); await new Promise(r => child.once('exit', r)); }
 });
 
@@ -409,12 +412,12 @@ test('[http P11] GET /api/leaderboard returns ranked array', { timeout: 12000 },
     await httpRequest('GET', `http://127.0.0.1:${port}/api/profile`, { headers: { Cookie: cookie } });
     const lbRes = await httpRequest('GET', `http://127.0.0.1:${port}/api/leaderboard`, { headers: { Cookie: cookie } });
     assert.strictEqual(lbRes.status, 200);
-    assert.ok(Array.isArray(lbRes.body.leaderboard));
-    if (lbRes.body.leaderboard.length > 0) {
-      const first = lbRes.body.leaderboard[0];
+    assert.ok(Array.isArray(lbRes.body.entries), 'leaderboard should have entries[] key');
+    if (lbRes.body.entries.length > 0) {
+      const first = lbRes.body.entries[0];
       assert.ok(typeof first.rank === 'number');
-      assert.ok(typeof first.display_name === 'string');
-      assert.ok(typeof first.lifetime_score === 'number');
+      assert.ok(typeof first.name === 'string');
+      assert.ok(typeof first.score === 'number');
     }
   } finally { child.kill('SIGTERM'); await new Promise(r => child.once('exit', r)); }
 });
@@ -436,9 +439,9 @@ test('[socket P12] join emits circus_profile with name and lifetime score', { ti
       sock.emit('join', { name: 'TestPlayer' });
       const profile = await once(sock, 'circus_profile', 5000);
       assert.ok(profile, 'no circus_profile event received');
-      assert.ok(typeof profile.display_name === 'string', 'no display_name');
-      assert.ok(typeof profile.lifetime_score === 'number', 'no lifetime_score');
-      assert.ok(typeof profile.id === 'number', 'no profile id');
+      assert.ok(typeof profile.name === 'string', 'no name');
+      assert.ok(typeof profile.lifetimeScore === 'number', 'no lifetimeScore');
+      assert.ok(typeof profile.id === 'string', 'profile id must be a string');
     } finally { sock.disconnect(); }
   } finally { child.kill('SIGTERM'); await new Promise(r => child.once('exit', r)); }
 });
@@ -482,13 +485,10 @@ test('[socket P13+P14] server-scored answer updates lifetime score; replay is id
     try {
       sock.emit('join', { name: 'Scorer' });
       const profile = await once(sock, 'circus_profile', 5000);
-      const beforeScore = profile.lifetime_score;
+      const beforeScore = profile.lifetimeScore;
 
-      // Wait for a question to be live (circus_question or circus_idle)
-      // If idle, we can't force a question from client — skip scoring sub-check
-      // but we can still verify the profile event structure
-      assert.ok(typeof profile.lifetime_score === 'number');
-      assert.ok(typeof profile.display_name === 'string');
+      assert.ok(typeof profile.lifetimeScore === 'number');
+      assert.ok(typeof profile.name === 'string');
     } finally { sock.disconnect(); }
 
     // Verify idempotency directly via DB

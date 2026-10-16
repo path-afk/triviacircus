@@ -13,13 +13,13 @@ const fs           = require('fs');
 const crypto        = require('crypto');
 const cookieParser  = require('cookie-parser');
 const { generateToken, setCookie, getToken, tokenFromCookieHeader } = require('./lib/auth');
-const { getDb, getOrCreateProfile, regenerateName, recordScore, getLeaderboard, getProfileRank, effectiveName } = require('./lib/db');
+const { getDb, getOrCreateProfile, regenerateName, recordScore, getLeaderboard, getProfileRank, publicProfile } = require('./lib/db');
 const names         = require('./lib/names');
 
 const app        = express();
 const httpServer = http.createServer(app);
 const io         = new Server(httpServer, {
-  cors: { origin: '*' },
+  cors: process.env.NODE_ENV === 'production' ? false : { origin: true },
   transports: ['websocket', 'polling']
 });
 app.use(cookieParser());
@@ -63,29 +63,29 @@ app.get('/api/profile', (req, res) => {
   try {
     const db = getDb();
     const raw = getOrCreateProfile(db, req._tcToken, names.generate);
-    const { token_hash: _th, ...profile } = raw;
-    const rank = getProfileRank(db, profile.id);
-    res.json({ ...profile, rank, effective_name: effectiveName(raw) });
+    const rank = getProfileRank(db, raw.id);
+    res.json(publicProfile(raw, rank));
   } catch (e) { res.status(500).json({ error: 'Profile unavailable' }); }
 });
 
-// POST /api/profile/rename — regenerate display name (rate-limited)
+// POST /api/profile/rename — regenerate display name (rate-limited, 5 s cooldown)
 app.post('/api/profile/rename', renameRateLimiter, (req, res) => {
   try {
     const db = getDb();
     const raw = getOrCreateProfile(db, req._tcToken, names.generate);
-    const newName = regenerateName(db, raw.id, names.generate);
+    const newName = regenerateName(db, raw.id, names.generate, raw.display_name);
     const updated = db.prepare('SELECT * FROM profiles WHERE id = ?').get(raw.id);
-    res.json({ display_name: newName, lifetime_score: updated.lifetime_score, correct_answers: updated.correct_answers, effective_name: newName });
+    res.json(publicProfile(updated, getProfileRank(db, updated.id)));
   } catch (e) { res.status(500).json({ error: 'Rename failed' }); }
 });
 
-// GET /api/leaderboard — all-time top 25
-app.get('/api/leaderboard', (_req, res) => {
+// GET /api/leaderboard?limit=N — all-time top N (scored players only, safe fields)
+app.get('/api/leaderboard', (req, res) => {
   try {
     const db = getDb();
-    const board = getLeaderboard(db, 25);
-    res.json({ leaderboard: board.map((p, i) => { const { token_hash: _th, ...safe } = p; return { ...safe, rank: i + 1, effective_name: effectiveName(p) }; }) });
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 25), 100);
+    const entries = getLeaderboard(db, limit);
+    res.json({ entries });
   } catch (e) { res.status(500).json({ error: 'Leaderboard unavailable' }); }
 });
 
@@ -234,7 +234,7 @@ const circus = {
   currentQ: null,
   questionSentAt: 0,      // server-recorded, used for speed calc
   // Players who were connected when this question was sent — used for unanimity
-  eligibleSids: new Set(),
+  eligibleProfileIds: new Set(),
   answers: new Map(),     // sid → { choice, elapsedMs }
   sygChoices: new Map(),  // sid → 'stay' | 'switch'
   // Players who answered correctly before reveal (for Oracle detection)
@@ -244,6 +244,8 @@ const circus = {
   pool: [],
   poolIdx: 0,
   roundId: null,    // UUID per question — idempotency key for lifetime score events
+  roundEarned: new Map(),   // profileId → { points, correct } — accumulated until endRound
+  profileSocketMap: new Map(), // profileId → socketId (current active socket)
 };
 
 function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
@@ -266,7 +268,7 @@ function presencePayload() {
     name: p.name,
     score: p.score,
     streak: p.streak,
-    answered: circus.answers.has(p.id),
+    answered: circus.answers.has(p.profileId || p.id),
   }));
 }
 
@@ -298,8 +300,9 @@ function startQuestion() {
   circus.answers.clear();
   circus.sygChoices.clear();
   circus.initialCorrect.clear();
-  // Lock in eligible players at question start
-  circus.eligibleSids = new Set(connectedPlayers().map(p => p.id));
+  // Lock in eligible players at question start (keyed by profileId, not socketId)
+  circus.eligibleProfileIds = new Set(connectedPlayers().map(p => p.profileId || p.id));
+  circus.roundEarned = new Map(); // reset per question
   circus.phase = 'question';
 
   // Strip answer from broadcast
@@ -319,12 +322,12 @@ function startQuestion() {
 
 function checkAllAnswered() {
   // If every eligible still-connected player has answered, advance early
-  const eligibleConnected = [...circus.eligibleSids].filter(sid => {
-    const p = circus.players.get(sid);
+  const eligibleConnected = [...circus.eligibleProfileIds].filter(pid => {
+    const p = circus.players.get(pid);
     return p && p.connected;
   });
   if (eligibleConnected.length === 0) return;
-  if (eligibleConnected.every(sid => circus.answers.has(sid))) {
+  if (eligibleConnected.every(pid => circus.answers.has(pid))) {
     clearTimeout(circus.timer);
     revealRound();
   }
@@ -341,10 +344,7 @@ function revealRound() {
   circus.answers.forEach(a => { tally[a.choice] = (tally[a.choice] || 0) + 1; });
 
   const totalAnswered  = circus.answers.size;
-  const totalEligible  = [...circus.eligibleSids].filter(sid => {
-    const p = circus.players.get(sid);
-    return p && p.connected;
-  }).length;
+  const totalEligible  = circus.eligibleProfileIds.size; // all eligible (incl. disconnected)
   const correctCount   = tally[q.answer] || 0;
 
   const pct = {};
@@ -360,11 +360,18 @@ function revealRound() {
   const divided = !isUnanimous && totalAnswered > 1
     && Object.values(tally).filter(v => v > 0).length > 1;
 
-  // Score all answerers
-  const _roundEarned = new Map(); // sid → { points, correct } — for lifetime recording
-  circus.answers.forEach((a, sid) => {
-    const player = circus.players.get(sid);
-    if (!player || !player.connected) return;
+  // Score all eligible players (keyed by profileId — includes disconnected players with accepted answers)
+  const _roundEarned = circus.roundEarned; // shared with resolveSYG for Oracle accumulation
+  _roundEarned.clear();
+  circus.eligibleProfileIds.forEach(profileId => {
+    const player = circus.players.get(profileId);
+    const a = circus.answers.get(profileId);
+    if (!player) return;
+    if (!a) {
+      // Eligible but did not answer — score 0, counts against unanimity
+      _roundEarned.set(profileId, { points: 0, correct: false });
+      return;
+    }
     const correct = a.choice === q.answer;
     player.stats.correct = (player.stats.correct || 0) + (correct ? 1 : 0);
     player.stats.wrong   = (player.stats.wrong   || 0) + (correct ? 0 : 1);
@@ -380,14 +387,16 @@ function revealRound() {
       if (!player.stats.catWins) player.stats.catWins = {};
       player.stats.catWins[q.category] = (player.stats.catWins[q.category] || 0) + 1;
       circus.initialCorrect.add(sid);
-      _roundEarned.set(sid, { points: earned, correct: true });
-      io.to(sid).emit('answer_result', { correct: true, earned, speed, streak, trust, dd });
+      _roundEarned.set(profileId, { points: earned, correct: true });
+      const _sid = (player && player.socketId) || profileId;
+      io.to(_sid).emit('answer_result', { correct: true, earned, speed, streak, trust, dd });
     } else {
       const _ddPenalty = player.doubleDown ? -CFG.DD_STAKE : 0;
       if (player.doubleDown) player.score = Math.max(0, (player.score || 0) - CFG.DD_STAKE);
       player.streak = 0;
-      _roundEarned.set(sid, { points: _ddPenalty, correct: false });
-      io.to(sid).emit('answer_result', { correct: false, earned: 0 });
+      _roundEarned.set(profileId, { points: _ddPenalty, correct: false });
+      const _sid2 = (player && player.socketId) || profileId;
+      io.to(_sid2).emit('answer_result', { correct: false, earned: 0 });
     }
     player.doubleDown = false;
   });
@@ -400,21 +409,7 @@ function revealRound() {
     presence: presencePayload(),
   });
 
-  // ── Lifetime score persistence ────────────────────────────────────────────
-  if (circus.roundId) {
-    try {
-      const _db = getDb();
-      for (const [_sid, { points: _pts, correct: _cor }] of _roundEarned) {
-        const _sock = io.sockets.sockets.get(_sid);
-        if (_sock && _sock._tcProfile) {
-          const _new = recordScore(_db, _sock._tcProfile.id, circus.roundId, _pts, _cor);
-          if (_new) _sock._tcProfile = _db.prepare('SELECT * FROM profiles WHERE id = ?').get(_sock._tcProfile.id);
-        }
-      }
-      const _board = getLeaderboard(_db, 10);
-      broadcast('circus_leaderboard', { leaderboard: _board.map((_p, _i) => { const { token_hash: _t, ..._sp } = _p; return { ..._sp, rank: _i + 1, effective_name: effectiveName(_p) }; }) });
-    } catch (_err) { console.error('[persist] score error:', _err.message); }
-  }
+  // ── Lifetime persistence is deferred to endRound() so Oracle/DD are included ──
 
   if (divided) {
     circus.phase = 'syg';
@@ -435,16 +430,19 @@ function resolveSYG() {
   // Wrong players who switch to the correct answer after seeing it do NOT qualify.
   const initialCorrectCount = circus.initialCorrect.size;
 
-  circus.sygChoices.forEach((decision, sid) => {
-    const player = circus.players.get(sid);
-    if (!player || !player.connected) return;
-    // Only initially-correct players who explicitly "stood" are eligible for Oracle
-    if (decision === 'stay' && circus.initialCorrect.has(sid)) {
-      // Oracle only if they were the lone initially-correct player
+  circus.sygChoices.forEach((decision, profileId) => {
+    const player = circus.players.get(profileId);
+    if (!player) return;
+    if (decision === 'stay' && circus.initialCorrect.has(profileId)) {
       if (initialCorrectCount === 1) {
         player.score = (player.score || 0) + CFG.ORACLE_BONUS;
         player.stats.oracle = (player.stats.oracle || 0) + 1;
-        io.to(sid).emit('oracle_moment', { bonus: CFG.ORACLE_BONUS });
+        // Blocker 10: accumulate Oracle bonus into roundEarned (persisted in endRound)
+        const existing = circus.roundEarned.get(profileId);
+        if (existing) existing.points += CFG.ORACLE_BONUS;
+        else circus.roundEarned.set(profileId, { points: CFG.ORACLE_BONUS, correct: true });
+        const _sockId = circus.profileSocketMap.get(profileId);
+        if (_sockId) io.to(_sockId).emit('oracle_moment', { bonus: CFG.ORACLE_BONUS });
       }
     }
   });
@@ -454,6 +452,31 @@ function resolveSYG() {
 
 function endRound() {
   clearTimers();
+
+  // ── Persist lifetime scores (blocker 10: complete delta including Oracle + DD) ──
+  if (circus.roundId && circus.roundEarned.size > 0) {
+    try {
+      const _db = getDb();
+      for (const [_pid, { points: _pts, correct: _cor }] of circus.roundEarned) {
+        try {
+          const _new = recordScore(_db, _pid, circus.roundId, _pts, _cor);
+          if (_new) {
+            // Refresh cached profile on socket
+            const _sockId = circus.profileSocketMap.get(_pid);
+            const _sock = _sockId ? io.sockets.sockets.get(_sockId) : null;
+            if (_sock && _sock._tcProfile) {
+              _sock._tcProfile = _db.prepare('SELECT * FROM profiles WHERE id = ?').get(_pid);
+            }
+          }
+        } catch (_e) { console.error('[persist] score error for', _pid, _e.message); }
+      }
+      // Broadcast updated all-time leaderboard
+      const _board = getLeaderboard(_db, 10);
+      broadcast('circus_leaderboard', { entries: _board });
+    } catch (_err) { console.error('[persist] endRound error:', _err.message); }
+    circus.roundEarned.clear();
+  }
+
   broadcast('round_end', { leaderboard: leaderboard() });
   if (connectedPlayers().length === 0) {
     circus.phase = 'idle';
@@ -472,10 +495,11 @@ io.use((socket, next) => {
     const token  = tokenFromCookieHeader(header) || generateToken();
     const db     = getDb();
     socket._tcProfile = getOrCreateProfile(db, token, names.generate);
+    socket.data.profileId = socket._tcProfile ? socket._tcProfile.id : null;
   } catch (e) {
-    console.error('[persist] socket profile error:', e.message);
-    // Non-fatal — allow connection without persistence
+    console.error('[persist] socket middleware error:', e.message);
     socket._tcProfile = null;
+    socket.data.profileId = null;
   }
   next();
 });
@@ -488,32 +512,41 @@ io.on('connection', socket => {
   });
 
   socket.on('join', (rawData) => {
-    const data = validateJoin(rawData);
-    if (!data) return;
+    // Name from client is IGNORED — identity comes from the authenticated cookie profile
     if (circus.players.size >= CFG.MAX_PLAYERS) {
       socket.emit('error', { msg: 'The circus is full' });
       return;
     }
 
-    // Remove prior membership if this socket rejoins
-    const existing = circus.players.get(socket.id);
+    const profileId = socket.data.profileId;
+    const profile   = socket._tcProfile;
+    const serverName = profile ? profile.display_name : genName();
+
+    // Same-cookie tab dedup: update socketId on existing player (blocker 5)
+    const existing = profileId ? circus.players.get(profileId) : null;
     if (existing) {
-      circus.answers.delete(socket.id);
-      circus.eligibleSids.delete(socket.id);
+      existing.socketId = socket.id;
+      existing.connected = true;
+      // If this profile already has an accepted answer in this round, lock it in
+      socket.emit('answer_locked', circus.answers.get(profileId) || null);
+    } else {
+      const player = {
+        profileId: profileId || socket.id,
+        id: profileId || socket.id,
+        socketId: socket.id,
+        name: serverName,
+        score: 0, streak: 0, doubleDown: false, connected: true,
+        stats: { correct: 0, wrong: 0, oracle: 0, fast: 0, catWins: {} },
+      };
+      circus.players.set(profileId || socket.id, player);
     }
+    if (profileId) circus.profileSocketMap.set(profileId, socket.id);
+    socket.data.name = serverName;
 
-    const name = clean(data.name) || genName();
-    const player = {
-      id: socket.id, name,
-      score: 0, streak: 0, doubleDown: false, connected: true,
-      stats: { correct: 0, wrong: 0, oracle: 0, fast: 0, catWins: {} },
-    };
-    circus.players.set(socket.id, player);
-    socket.data.name = name;
-
-    // Build join response with current state
+    // Build join response with current state (blocker 2: no name from URL)
     const state = {
-      name, phase: circus.phase, presence: presencePayload(), leaderboard: leaderboard(),
+      name: serverName, phase: circus.phase, presence: presencePayload(), leaderboard: leaderboard(),
+      profile: profile ? publicProfile(profile, getProfileRank(getDb(), profile.id)) : null,
     };
     if (circus.phase === 'question' && circus.currentQ) {
       const elapsed  = Date.now() - circus.questionSentAt;
@@ -531,12 +564,11 @@ io.on('connection', socket => {
 
     // Emit persistent profile and all-time leaderboard to this client
     if (socket._tcProfile) {
-      const { token_hash: _th, ...safePro } = socket._tcProfile;
-      socket.emit('circus_profile', { ...safePro, effective_name: effectiveName(socket._tcProfile) });
+      const _db = getDb();
+      socket.emit('circus_profile', publicProfile(socket._tcProfile, getProfileRank(_db, socket._tcProfile.id)));
       try {
-        const _db = getDb();
         const board = getLeaderboard(_db, 10);
-        socket.emit('circus_leaderboard', { leaderboard: board.map((p, i) => { const { token_hash: __th, ...sp } = p; return { ...sp, rank: i + 1, effective_name: effectiveName(p) }; }) });
+        socket.emit('circus_leaderboard', { entries: board });
       } catch (_) {}
     }
 
@@ -551,24 +583,25 @@ io.on('connection', socket => {
     const data = validateAnswer(rawData);
     if (!data) return;
     if (circus.phase !== 'question') return;
-    const player = circus.players.get(socket.id);
-    if (!player || !player.connected) return;
-    if (circus.answers.has(socket.id)) return; // already answered
+    const profileId = socket.data.profileId || socket.id;
+    const player = circus.players.get(profileId);
+    if (!player) return;
+    // Check eligibility (must have been in circus at question start — blocker 5)
+    if (!circus.eligibleProfileIds.has(profileId)) return;
+    // One answer per profile per round (blocker 5)
+    if (circus.answers.has(profileId)) return;
 
     // Server-side elapsed time — ignore client timeMs
     const elapsedMs = Date.now() - circus.questionSentAt;
-    circus.answers.set(socket.id, { choice: data.choice, elapsedMs });
+    circus.answers.set(profileId, { choice: data.choice, elapsedMs });
 
     socket.emit('answer_locked', { choice: data.choice });
     broadcast('presence', { players: presencePayload() });
 
     // Count for the bar display
-    const eligibleConnected = [...circus.eligibleSids].filter(sid => {
-      const p = circus.players.get(sid); return p && p.connected;
-    });
     io.emit('answer_count', {
-      count: [...circus.answers.keys()].filter(sid => circus.eligibleSids.has(sid)).length,
-      total: eligibleConnected.length,
+      count: [...circus.answers.keys()].filter(pid => circus.eligibleProfileIds.has(pid)).length,
+      total: circus.eligibleProfileIds.size,
     });
 
     checkAllAnswered();
@@ -576,25 +609,25 @@ io.on('connection', socket => {
 
   socket.on('double_down', () => {
     if (circus.phase !== 'question') return;
-    const player = circus.players.get(socket.id);
-    if (!player || !player.connected || player.doubleDown) return;
+    const profileId = socket.data.profileId || socket.id;
+    const player = circus.players.get(profileId);
+    if (!player || player.doubleDown) return;
     player.doubleDown = true;
     socket.emit('doubled_down');
   });
 
   socket.on('stand_ground', (rawData) => {
     if (circus.phase !== 'syg') return;
-    const player = circus.players.get(socket.id);
-    if (!player || !player.connected) return;
+    const profileId = socket.data.profileId || socket.id;
+    const player = circus.players.get(profileId);
+    if (!player) return;
     if (!rawData || typeof rawData !== 'object') return;
-    // Accept {decision:'stay'} OR {choice:'A'|'B'|'C'|'D'} (explicit switch target)
     let finalChoice;
     if (rawData.decision === 'stay') {
-      // Stay with original answer
-      const orig = circus.answers.get(socket.id);
+      const orig = circus.answers.get(profileId);
       finalChoice = orig ? orig.choice : null;
       if (!finalChoice) return;
-      circus.sygChoices.set(socket.id, 'stay');
+      circus.sygChoices.set(profileId, 'stay');
     } else if (VALID_CHOICES.has(rawData.choice)) {
       // Explicit switch to a specific answer
       finalChoice = rawData.choice;
@@ -607,23 +640,47 @@ io.on('connection', socket => {
     socket.emit('syg_locked', { decision: rawData.decision || 'switch', choice: finalChoice });
   });
 
-  socket.on('reaction', (rawData) => {
+  
+  // regenerate_name socket event — rate-limited name regeneration via socket ack
+  socket.on('regenerate_name', (data, ack) => {
+    try {
+      if (typeof ack !== 'function') return;
+      const profileId = socket.data.profileId;
+      if (!profileId) return ack({ error: 'No authenticated profile' });
+      const profile = socket._tcProfile;
+      if (!profile) return ack({ error: 'Profile not loaded' });
+      // Rate limit (reuse HTTP rate limiter timestamps map)
+      const now = Date.now();
+      const last = _renameTs.get(profileId);
+      if (last && now - last < RENAME_COOLDOWN_MS) return ack({ error: 'Please wait before renaming' });
+      _renameTs.set(profileId, now);
+      const db = getDb();
+      const newName = regenerateName(db, profileId, names.generate, profile.display_name);
+      socket._tcProfile = db.prepare('SELECT * FROM profiles WHERE id = ?').get(profileId);
+      const rank = getProfileRank(db, profileId);
+      ack({ profile: publicProfile(socket._tcProfile, rank) });
+    } catch (e) {
+      if (typeof ack === 'function') ack({ error: 'Rename failed' });
+    }
+  });
+socket.on('reaction', (rawData) => {
     const data = validateReaction(rawData);
     if (!data) return;
-    const player = circus.players.get(socket.id);
+    const profileId = socket.data.profileId || socket.id;
+    const player = circus.players.get(profileId);
     if (!player || !player.connected) return;
     broadcast('reaction', { name: player.name, emoji: data.emoji });
   });
 
   socket.on('disconnect', () => {
-    const player = circus.players.get(socket.id);
+    const profileId = socket.data.profileId || socket.id;
+    const player = circus.players.get(profileId);
     if (!player) return;
     player.connected = false;
-
-    // Remove from eligible set so unanimity isn't blocked by disconnected player
-    circus.eligibleSids.delete(socket.id);
-    // Remove any pending answer from disconnected player in case they hadn't answered
-    circus.answers.delete(socket.id);
+    // Blocker 4: preserve accepted answers + eligibility on disconnect for scoring
+    if (circus.profileSocketMap.get(profileId) === socket.id) {
+      circus.profileSocketMap.delete(profileId);
+    }
 
     // Broadcast updated presence
     broadcast('presence', { players: presencePayload() });
@@ -632,8 +689,8 @@ io.on('connection', socket => {
     if (circus.phase === 'question') {
       checkAllAnswered();
       // Also check if nobody left (timer-off safety: if 0 eligible, advance)
-      const eligibleConnected = [...circus.eligibleSids].filter(sid => {
-        const p = circus.players.get(sid); return p && p.connected;
+      const eligibleConnected = [...circus.eligibleProfileIds].filter(pid => {
+        const p = circus.players.get(pid); return p && p.connected;
       });
       if (eligibleConnected.length === 0) {
         clearTimeout(circus.timer);

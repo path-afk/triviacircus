@@ -2,89 +2,98 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Trivia Circus — The Show Never Stops</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<title>Trivia Circus</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--navy:#0f1c2e;--ivory:#faf6f0;--coral:#ff5252;--coral2:#e04444;--teal:#00c9a7;--amber:#ffb347;--white:#f0f4f8;--dim:#7a9bb5}
-body{background:var(--navy);color:var(--white);font-family:Inter,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1.5rem}
-.wrap{width:100%;max-width:420px;text-align:center}
-.logo{font-size:3rem;margin-bottom:.5rem}
-h1{font-size:2rem;font-weight:900;letter-spacing:-1px;margin-bottom:.4rem}
+:root{
+  color-scheme:light;
+  --page:#f7f4ee;--surface:#ffffff;--text:#16202a;--text-muted:#4b5a67;
+  --border:#6b7782;--border-soft:#d8d4cc;
+  --coral:#c92f3f;--coral-hover:#a82334;--teal:#007f6d;--teal-hover:#006b5d;
+  --focus:#006b5d;--shadow:0 12px 32px rgb(22 32 42/12%);
+}
+body{background:var(--page);color:var(--text);font-family:system-ui,-apple-system,Inter,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1.5rem}
+.wrap{width:100%;max-width:440px}
+.logo{font-size:2rem;margin-bottom:.25rem;text-align:center}
+h1{font-size:1.5rem;font-weight:800;text-align:center;margin-bottom:.25rem;letter-spacing:-.5px}
 h1 span{color:var(--coral)}
-.tag{color:var(--dim);font-size:.95rem;margin-bottom:2rem;line-height:1.6}
-.live-count{background:rgba(0,201,167,.1);border:1px solid rgba(0,201,167,.25);border-radius:999px;color:var(--teal);font-size:.78rem;font-weight:700;padding:.3rem .85rem;margin-bottom:2rem;display:inline-block}
-.card{background:var(--ivory);border-radius:16px;padding:2rem;color:#1a2a3a;box-shadow:0 20px 56px rgba(0,0,0,.4)}
-.card h2{font-size:1.1rem;font-weight:800;margin-bottom:.5rem}
-.card-sub{font-size:.78rem;color:#7a8a9b;margin-bottom:1.25rem}
-/* Visually hidden but accessible to screen readers */
-.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-/* Generated name badge */
-.name-badge{background:#f0f4f8;border:2px solid #dde3ea;border-radius:12px;padding:1rem 1.25rem;margin-bottom:.75rem;text-align:center;min-height:56px;display:flex;align-items:center;justify-content:center}
-.name-badge span{font-size:1.3rem;font-weight:900;color:#1a2a3a;letter-spacing:-.5px}
-.btn-regen{display:flex;align-items:center;justify-content:center;gap:.4rem;width:100%;background:transparent;border:1.5px solid #dde3ea;border-radius:8px;padding:.6rem 1rem;font-size:.85rem;font-weight:700;color:#4a6070;cursor:pointer;font-family:Inter,sans-serif;margin-bottom:.6rem;min-height:48px;transition:all .15s}
+.tag{color:var(--text-muted);font-size:.9rem;text-align:center;margin-bottom:1.5rem}
+.live-ct{background:rgba(0,127,109,.1);border:1px solid rgba(0,127,109,.25);border-radius:999px;color:var(--teal);font-size:.75rem;font-weight:700;padding:.3rem .9rem;margin-bottom:1.75rem;display:inline-block;width:100%;text-align:center}
+.card{background:var(--surface);border-radius:16px;padding:1.75rem 2rem;box-shadow:var(--shadow);border:1px solid var(--border-soft);margin-bottom:1.25rem}
+.eyebrow{font-size:.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem}
+/* Assigned name — the dominant element (blocker 1: clamp big+bold) */
+.assigned-name{
+  color:var(--text);
+  font-size:clamp(2.5rem,9vw,4.5rem);
+  font-weight:900;
+  line-height:.98;
+  letter-spacing:-.035em;
+  text-wrap:balance;
+  overflow-wrap:break-word;
+  margin-bottom:1rem;
+  min-height:2.5rem;
+}
+.assigned-name.loading{color:var(--text-muted);font-size:1.25rem;font-weight:600}
+.btn-regen{display:flex;align-items:center;justify-content:center;gap:.35rem;width:100%;background:transparent;border:1.5px solid var(--border);border-radius:8px;padding:.7rem 1rem;font-size:.9rem;font-weight:700;color:var(--text-muted);cursor:pointer;font-family:inherit;margin-bottom:.75rem;min-height:48px;transition:border-color .15s,color .15s}
 .btn-regen:hover{border-color:var(--teal);color:var(--teal)}
-.btn-regen:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.btn-regen:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
 .btn-regen:disabled{opacity:.45;cursor:not-allowed}
-.lifetime{font-size:.78rem;color:#4a6070;font-weight:600;margin-bottom:.5rem;background:rgba(0,201,167,.07);border-radius:6px;padding:.35rem .75rem;text-align:center;display:none}
-.cookie-note{font-size:.73rem;color:#7a8a9b;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:center;gap:.3rem}
-.divider{border:none;border-top:1px solid #dde3ea;margin:1rem 0}
-.btn{display:block;width:100%;padding:.9rem;border-radius:9px;border:none;font-size:1rem;font-weight:800;cursor:pointer;font-family:Inter,sans-serif;background:var(--coral);color:#fff;transition:all .18s;min-height:52px}
-.btn:hover{background:var(--coral2);transform:translateY(-1px);box-shadow:0 8px 24px rgba(255,82,82,.3)}
-.btn:focus-visible{outline:2px solid var(--coral);outline-offset:3px}
+.lifetime{font-size:.85rem;color:var(--teal);font-weight:700;margin-bottom:.5rem;padding:.35rem .75rem;background:rgba(0,127,109,.07);border-radius:6px;text-align:center;display:none}
+.cookie-note{font-size:.75rem;color:var(--text-muted);margin-bottom:1.25rem;text-align:center}
+hr{border:none;border-top:1px solid var(--border-soft);margin:1rem 0}
+.btn{display:block;width:100%;padding:.95rem;border-radius:9px;border:none;font-size:1rem;font-weight:800;cursor:pointer;font-family:inherit;background:var(--coral);color:#fff;transition:background .18s,transform .15s;min-height:52px}
+.btn:hover{background:var(--coral-hover);transform:translateY(-1px)}
+.btn:disabled{opacity:.5;transform:none;cursor:not-allowed}
+.btn:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
 .err{color:var(--coral);font-size:.82rem;margin-top:.6rem;min-height:1.1rem;text-align:center}
-.cookie-warn{background:rgba(255,179,71,.1);border:1px solid rgba(255,179,71,.3);border-radius:8px;padding:.6rem .85rem;color:#8a6000;font-size:.75rem;margin-top:.75rem;display:none;text-align:left;line-height:1.5}
-.cats{display:flex;flex-wrap:wrap;justify-content:center;gap:.4rem;margin-top:2rem}
-.cat{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--dim);font-size:.72rem;padding:.25rem .7rem;border-radius:999px}
-footer{color:var(--dim);font-size:.75rem;margin-top:2.5rem}
-@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.cookie-warn{background:#fff8e1;border:1px solid #f0c030;border-radius:8px;padding:.65rem .85rem;color:#7a5800;font-size:.8rem;margin-top:.75rem;display:none}
+/* All-time leaderboard */
+.lb-card{background:var(--surface);border-radius:14px;padding:1.25rem 1.5rem;box-shadow:var(--shadow);border:1px solid var(--border-soft)}
+.lb-card h2{font-size:.9rem;font-weight:800;margin-bottom:.75rem;color:var(--text)}
+.lb-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.lb-table th{text-align:left;color:var(--text-muted);font-size:.7rem;font-weight:700;text-transform:uppercase;padding:.35rem .5rem;border-bottom:1px solid var(--border-soft)}
+.lb-table td{padding:.45rem .5rem;border-bottom:1px solid var(--border-soft)}
+.lb-table tr:last-child td{border-bottom:none}
+.lb-table .rank{font-weight:800;color:var(--text-muted);width:2rem}
+.lb-table .me td{background:rgba(0,127,109,.06)}
+.lb-table .me .name{font-weight:800;color:var(--teal)}
+.lb-status{font-size:.72rem;color:var(--text-muted);margin-top:.5rem}
+.cats{display:flex;flex-wrap:wrap;justify-content:center;gap:.35rem;margin-top:1.25rem}
+.cat{background:rgba(22,32,42,.06);border:1px solid var(--border-soft);color:var(--text-muted);font-size:.7rem;padding:.22rem .65rem;border-radius:999px}
+footer{color:var(--text-muted);font-size:.72rem;text-align:center;margin-top:2rem}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:380px){.assigned-name{font-size:clamp(2rem,11vw,3.5rem)}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="logo" aria-hidden="true">🎪</div>
   <h1>Trivia <span>Circus</span></h1>
-  <p class="tag">The show never stops.<br>Walk in. Answer. Earn your title.</p>
-  <div class="live-count" id="live-count" aria-live="polite" aria-atomic="true">🟢 Loading...</div>
+  <p class="tag">The show never stops. Walk in and earn your title.</p>
+  <div class="live-ct" id="live-ct" aria-live="polite">Loading…</div>
 
-  <div class="card">
-    <h2>Your circus name</h2>
-    <p class="card-sub">Auto-assigned — changes any time. Score always saved.</p>
-
-    <!-- Screen reader status region for name changes -->
-    <div id="name-status" class="sr-only" aria-live="polite" aria-atomic="true"></div>
-
-    <!-- Generated name display — this is the primary identity -->
-    <div class="name-badge" aria-label="Your assigned circus name">
-      <span id="name-display" tabindex="0">Loading…</span>
-    </div>
-
-    <button class="btn-regen" id="regen-btn" onclick="regenName()"
-      aria-label="Give me a different circus name" aria-controls="name-display">
-      🎲 Give me another name
-    </button>
-
-    <!-- Lifetime score shown if player has played before -->
+  <div class="card" role="region" aria-label="Your circus identity">
+    <div class="eyebrow">Your Circus Name</div>
+    <div class="sr-only" id="name-status" aria-live="polite" aria-atomic="true"></div>
+    <div class="assigned-name loading" id="name-display" tabindex="0" aria-label="Your assigned circus name">Finding your name…</div>
+    <button class="btn-regen" id="regen-btn" onclick="regenName()" aria-label="Give me a different name" disabled>🎲 Give me another name</button>
     <div class="lifetime" id="lifetime-score" aria-live="polite"></div>
-
-    <!-- Cookie/privacy note -->
-    <p class="cookie-note" id="cookie-note">
-      <span aria-hidden="true">🔒</span>
-      Score saved to this browser — no account needed
-    </p>
-
-    <hr class="divider" aria-hidden="true">
-
-    <button class="btn" id="enter-btn" onclick="enter()"
-      aria-label="Enter Trivia Circus and start playing">
-      Enter the Ring 🎪
-    </button>
+    <p class="cookie-note">Score saved to this browser · No account needed</p>
+    <hr aria-hidden="true">
+    <button class="btn" id="enter-btn" onclick="enter()" aria-label="Enter the ring and start playing" disabled>Enter the Ring 🎪</button>
     <div class="err" id="err" role="alert" aria-live="assertive"></div>
+    <div class="cookie-warn" id="cookie-warn" role="status">⚠ Cookies appear to be blocked — your score cannot be saved across visits.</div>
+  </div>
 
-    <!-- Shown only when cookies appear to be blocked -->
-    <div class="cookie-warn" id="cookie-warn" role="status">
-      ⚠️ Cookies appear to be blocked. Your score progress won't be saved across visits.
-    </div>
+  <div class="lb-card" role="region" aria-label="All-time leaderboard">
+    <h2>All-Time Leaderboard</h2>
+    <table class="lb-table" aria-label="All-time top scores">
+      <caption class="sr-only">All-time leaderboard</caption>
+      <thead><tr><th scope="col" class="rank">#</th><th scope="col">Player</th><th scope="col">Points</th></tr></thead>
+      <tbody id="lb-body"><tr><td colspan="3" style="color:var(--text-muted);font-size:.8rem;padding:.5rem">Loading…</td></tr></tbody>
+    </table>
+    <p class="lb-status" aria-live="polite">Updated after each scored round</p>
   </div>
 
   <div class="cats" aria-label="Available categories">
@@ -92,99 +101,131 @@ footer{color:var(--dim);font-size:.75rem;margin-top:2.5rem}
     <span class="cat">🌍 Geography</span><span class="cat">🎭 Culture</span>
     <span class="cat">🏆 Sports</span><span class="cat">🃏 Wild Card</span>
   </div>
-  <footer>Trivia Circus — Questions for people who actually know things.</footer>
+  <footer>Trivia Circus · Questions for people who actually know things.</footer>
 </div>
-
 <script src="/socket.io/socket.io.js"></script>
 <script>
 'use strict';
-// ── Live presence peek (session sidebar, lightweight) ──────────────────────
+var myProfile = null;
+var loading = true;
+
 var sc = io({transports:['websocket','polling']});
 sc.on('presence', function(d) {
-  var el = document.getElementById('live-count');
-  el.textContent = (d.players && d.players.length > 0)
+  var el = document.getElementById('live-ct');
+  el.textContent = d.players && d.players.length > 0
     ? '🟢 ' + d.players.length + ' player' + (d.players.length===1?'':'s') + ' in the ring now'
-    : '⭕ Circus is quiet — be the first in';
+    : '⭕ Be the first in';
 });
 sc.emit('peek');
-
-// ── Profile management ─────────────────────────────────────────────────────
-var myName = '';
-var loadError = false;
 
 function showErr(m) {
   var e = document.getElementById('err');
   e.textContent = m;
-  setTimeout(function() { if (e.textContent === m) e.textContent = ''; }, 3500);
+  setTimeout(function() { if (e.textContent===m) e.textContent=''; }, 3500);
+}
+
+function renderLb(entries) {
+  var tbody = document.getElementById('lb-body');
+  tbody.innerHTML = '';
+  if (!entries || !entries.length) {
+    var r = document.createElement('tr');
+    var c = document.createElement('td');
+    c.setAttribute('colspan','3');
+    c.style.cssText = 'color:var(--text-muted);font-size:.8rem;padding:.5rem';
+    c.textContent = 'No scores yet — be the first!';
+    r.appendChild(c); tbody.appendChild(r); return;
+  }
+  entries.forEach(function(p) {
+    var tr = document.createElement('tr');
+    if (myProfile && p.id === myProfile.id) { tr.className='me'; tr.setAttribute('aria-current','true'); }
+    var rankTd = document.createElement('td'); rankTd.className='rank'; rankTd.textContent = p.rank;
+    var nameTd = document.createElement('td'); nameTd.className='name';
+    nameTd.textContent = p.name;
+    if (myProfile && p.id === myProfile.id) {
+      var you = document.createElement('span');
+      you.style.cssText = 'font-size:.65rem;margin-left:.35rem;background:var(--teal);color:#fff;border-radius:4px;padding:.1rem .35rem';
+      you.textContent = 'You'; nameTd.appendChild(you);
+    }
+    var ptsTd = document.createElement('td');
+    ptsTd.textContent = p.score.toLocaleString();
+    tr.appendChild(rankTd); tr.appendChild(nameTd); tr.appendChild(ptsTd);
+    tbody.appendChild(tr);
+  });
 }
 
 async function loadProfile() {
   try {
     var r = await fetch('/api/profile');
-    if (!r.ok) throw new Error('status ' + r.status);
+    if (!r.ok) throw new Error(r.status);
     var p = await r.json();
-    myName = p.effective_name || p.display_name || '';
+    myProfile = p;
     var nd = document.getElementById('name-display');
-    nd.textContent = myName;
-    // Announce to screen reader
-    document.getElementById('name-status').textContent = 'Your circus name is ' + myName;
-
-    // Show lifetime score if player has played before
-    if (p.lifetime_score > 0) {
+    nd.textContent = p.name;
+    nd.classList.remove('loading');
+    nd.setAttribute('aria-label', 'Your assigned circus name: ' + p.name);
+    document.getElementById('name-status').textContent = 'Your circus name is ' + p.name;
+    if (p.lifetimeScore > 0) {
       var ls = document.getElementById('lifetime-score');
-      ls.textContent = '🏆 Lifetime score: ' + p.lifetime_score + ' pts · ' + p.correct_answers + ' correct';
+      ls.textContent = '🏆 Lifetime: ' + p.lifetimeScore.toLocaleString() + ' pts' + (p.rank ? ' · All-time #' + p.rank : '');
       ls.style.display = 'block';
     }
-
-    // If we got a profile, cookies are working
+    document.getElementById('regen-btn').disabled = false;
+    document.getElementById('enter-btn').disabled = false;
     document.getElementById('cookie-warn').style.display = 'none';
-  } catch (e) {
-    loadError = true;
-    document.getElementById('name-display').textContent = 'Error loading';
+    loading = false;
+  } catch(e) {
+    document.getElementById('name-display').textContent = 'Could not load profile';
     document.getElementById('cookie-warn').style.display = 'block';
+    document.getElementById('regen-btn').disabled = true;
+    document.getElementById('enter-btn').disabled = false; // still let them try
+    loading = false;
   }
+}
+
+async function loadLb() {
+  try {
+    var r = await fetch('/api/leaderboard?limit=10');
+    if (!r.ok) return;
+    var d = await r.json();
+    renderLb(d.entries);
+  } catch(_) {}
 }
 
 async function regenName() {
   var btn = document.getElementById('regen-btn');
   var nd  = document.getElementById('name-display');
-  btn.disabled = true;
-  btn.textContent = '🎲 Generating…';
+  btn.disabled = true; btn.textContent = '🎲 Generating…';
   try {
-    var r = await fetch('/api/profile/rename', { method: 'POST' });
+    var r = await fetch('/api/profile/rename', {method:'POST'});
     if (r.status === 429) { showErr('Wait a moment before renaming again.'); return; }
-    if (!r.ok) throw new Error('status ' + r.status);
+    if (!r.ok) throw new Error(r.status);
     var p = await r.json();
-    myName = p.effective_name || p.display_name || myName;
-    nd.textContent = myName;
+    myProfile = p;
+    nd.textContent = p.name;
     nd.focus();
-    // Screen reader announcement
     var ns = document.getElementById('name-status');
     ns.textContent = '';
-    // Small delay so screen readers re-announce
-    setTimeout(function() { ns.textContent = 'New name: ' + myName; }, 80);
-  } catch (e) {
-    showErr('Could not generate a new name. Try again.');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '🎲 Give me another name';
-  }
+    setTimeout(function(){ ns.textContent = 'New name: ' + p.name; }, 80);
+    if (p.lifetimeScore > 0) {
+      var ls = document.getElementById('lifetime-score');
+      ls.textContent = '🏆 Lifetime: ' + p.lifetimeScore.toLocaleString() + ' pts' + (p.rank ? ' · All-time #' + p.rank : '');
+      ls.style.display = 'block';
+    }
+  } catch(e) { showErr('Could not generate a new name. Try again.'); }
+  finally { btn.disabled = false; btn.textContent = '🎲 Give me another name'; }
 }
 
 function enter() {
-  if (!myName && !loadError) { showErr('Your name is still loading. One moment…'); return; }
-  var name = myName || '';
-  window.location.href = 'game.html?name=' + encodeURIComponent(name);
+  // Blocker 2: identity from cookie only — no name in URL
+  window.location.href = 'game.html';
 }
 
-// Keyboard: Enter on any element in the card enters the game
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Enter' && document.activeElement.id !== 'regen-btn') enter();
-  // 1-9 keys: future shortcuts (no-op here)
 });
 
-// Load profile on page ready
 loadProfile();
+loadLb();
 </script>
 </body>
 </html>

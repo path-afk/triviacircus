@@ -6,33 +6,39 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--navy:#0f1c2e;--navy2:#162840;--ivory:#faf6f0;--coral:#ff5252;--teal:#00c9a7;--amber:#ffb347;--white:#f0f4f8;--dim:#7a9bb5}
-body{background:var(--navy);color:var(--white);font-family:Inter,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
-.bar{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1.5rem;background:rgba(22,40,64,.95);border-bottom:1px solid rgba(255,255,255,.07);flex-shrink:0;gap:1rem}
-.logo{font-size:1.05rem;font-weight:900;color:var(--coral)}.logo em{color:var(--white);font-style:normal}
-.qctr{font-size:.75rem;color:var(--dim);font-weight:600}
-.myscore{font-size:.85rem;font-weight:800;color:var(--teal)}
+:root{
+  color-scheme:light;
+  --page:#f7f4ee;--surface:#ffffff;--text:#16202a;--text-muted:#4b5a67;
+  --border:#6b7782;--border-soft:#d8d4cc;
+  --coral:#c92f3f;--coral-hover:#a82334;--teal:#007f6d;--teal-hover:#006b5d;
+  --amber:#b07800;--focus:#006b5d;--shadow:0 8px 24px rgb(22 32 42/10%);
+}
+body{background:var(--page);color:var(--text);font-family:system-ui,-apple-system,Inter,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.bar{display:flex;align-items:center;justify-content:space-between;padding:.6rem 1.25rem;background:var(--surface);border-bottom:1px solid var(--border-soft);flex-shrink:0;gap:.75rem;box-shadow:0 1px 4px rgb(22 32 42/8%)}
+.logo{font-size:.9rem;font-weight:900;color:var(--coral)}.logo em{color:var(--text);font-style:normal}
+.qctr{font-size:.72rem;color:var(--text-muted);font-weight:600}
+.myscore{font-size:.82rem;font-weight:800;color:var(--teal)}
 .layout{display:flex;flex:1;overflow:hidden;min-height:0}
-.side{width:190px;flex-shrink:0;background:rgba(22,40,64,.75);border-right:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;overflow:hidden}
-.side-head{padding:.85rem 1rem;font-size:.7rem;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid rgba(255,255,255,.05);flex-shrink:0}
+.side{width:190px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border-soft);display:flex;flex-direction:column;overflow:hidden}
+.side-head{padding:.7rem .9rem;font-size:.65rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border-soft);flex-shrink:0}
 .plist{overflow-y:auto;flex:1}
-.prow{display:flex;align-items:center;gap:.5rem;padding:.55rem .85rem;border-bottom:1px solid rgba(255,255,255,.04)}
-.prow.me{background:rgba(255,82,82,.07)}
-.pav{width:1.75rem;height:1.75rem;border-radius:50%;background:var(--navy2);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--coral);font-size:.75rem;flex-shrink:0;border:1.5px solid rgba(255,82,82,.25)}
+.prow{display:flex;align-items:center;gap:.45rem;padding:.45rem .75rem;border-bottom:1px solid var(--border-soft)}
+.prow.me{background:rgba(0,127,109,.06)}
+.pav{width:1.6rem;height:1.6rem;border-radius:50%;background:#f0f4f8;display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--coral);font-size:.72rem;flex-shrink:0;border:1.5px solid var(--border-soft)}
 .pinfo{flex:1;min-width:0}
-.pname{font-size:.75rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pscore{font-size:.68rem;color:var(--teal);font-weight:700}
-.pdot{width:6px;height:6px;border-radius:50%;flex-shrink:0;background:rgba(255,255,255,.1)}
+.pname{font-size:.72rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.pscore{font-size:.65rem;color:var(--teal);font-weight:700}
+.pdot{width:5px;height:5px;border-radius:50%;flex-shrink:0;background:var(--border-soft)}
 .pdot.on{background:var(--coral)}
 .main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1.75rem;overflow:hidden;min-width:0}
-.announce{background:rgba(255,179,71,.12);border:1px solid rgba(255,179,71,.3);border-radius:8px;padding:.55rem 1rem;color:var(--amber);font-size:.82rem;font-weight:700;text-align:center;margin-bottom:.85rem;display:none;width:100%;max-width:660px}
+.announce{background:#fff8e1;border:1px solid #f0c030;border-radius:8px;padding:.55rem 1rem;color:var(--amber);font-size:.82rem;font-weight:700;text-align:center;margin-bottom:.85rem;display:none;width:100%;max-width:660px}
 .announce.show{display:block}
 .panel{width:100%;max-width:660px}
 #idle{text-align:center;padding:2rem}
 .big-e{font-size:4rem;margin-bottom:1rem}
 #idle h2{font-size:1.5rem;font-weight:900;margin-bottom:.5rem}
 #idle p{color:var(--dim);font-size:.9rem}
-#question{display:none;background:var(--ivory);color:#1a2a3a;border-radius:18px;padding:1.75rem 2rem;box-shadow:0 20px 56px rgba(0,0,0,.4)}
+#question{display:none;background:var(--surface);color:var(--text);border-radius:14px;padding:1.5rem 1.75rem;box-shadow:var(--shadow);border:1px solid var(--border-soft)}
 .qmeta{display:flex;align-items:center;gap:.85rem;margin-bottom:1.1rem}
 .qcat{background:rgba(15,28,46,.08);color:#4a6070;font-size:.7rem;font-weight:800;padding:.18rem .65rem;border-radius:999px}
 .twrap{margin-left:auto;position:relative;width:44px;height:44px;flex-shrink:0}
@@ -40,9 +46,9 @@ body{background:var(--navy);color:var(--white);font-family:Inter,sans-serif;heig
 .tnum{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.88rem;font-weight:800;color:#1a2a3a}
 .qtext{font-size:1.15rem;font-weight:700;line-height:1.5;margin-bottom:1.4rem;color:#0f1c2e}
 .opts{display:grid;grid-template-columns:1fr 1fr;gap:.65rem}
-.opt{background:#fff;border:2px solid #dde3ea;border-radius:11px;padding:.9rem 1rem;cursor:pointer;display:flex;align-items:center;gap:.6rem;text-align:left;color:#1a2a3a;font-family:Inter,sans-serif;font-size:.9rem;font-weight:600;transition:all .15s;width:100%;min-height:52px}
-.opt:hover:not(:disabled){border-color:var(--coral);background:#fff8f8}
-.opt:focus-visible{outline:2px solid var(--coral);outline-offset:2px}
+.opt{background:var(--surface);border:2px solid var(--border-soft);border-radius:10px;padding:.85rem 1rem;cursor:pointer;display:flex;align-items:center;gap:.55rem;text-align:left;color:var(--text);font-family:inherit;font-size:.88rem;font-weight:600;transition:border-color .15s,background .15s;width:100%;min-height:52px}
+.opt:hover:not(:disabled){border-color:var(--coral);background:#fff5f5}
+.opt:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
 .opt:disabled{cursor:default;opacity:.85}
 .opt.sel{border-color:var(--coral);background:#fff0f0}
 .opt.ok{border-color:var(--teal)!important;background:rgba(0,201,167,.08)!important;color:#0a6b5a}
@@ -54,7 +60,7 @@ body{background:var(--navy);color:var(--white);font-family:Inter,sans-serif;heig
 .action-row{display:flex;gap:.65rem;margin-top:.85rem;align-items:center;flex-wrap:wrap}
 .btn-dd{background:rgba(255,179,71,.1);border:1.5px solid rgba(255,179,71,.35);color:#b07800;font-size:.78rem;padding:.4rem .85rem;border-radius:7px;cursor:pointer;font-weight:700;font-family:Inter,sans-serif;min-height:40px}
 .btn-dd.on{background:rgba(255,179,71,.22)}.btn-dd:disabled{opacity:.35;cursor:default}
-#reveal{display:none;background:var(--ivory);color:#1a2a3a;border-radius:18px;padding:1.75rem 2rem;text-align:center;box-shadow:0 20px 56px rgba(0,0,0,.4)}
+#reveal{display:none;background:var(--surface);color:var(--text);border-radius:14px;padding:1.5rem 1.75rem;text-align:center;box-shadow:var(--shadow);border:1px solid var(--border-soft)}
 .rv-q{font-size:.9rem;font-weight:600;color:#6b7a8d;margin-bottom:.85rem;line-height:1.5}
 .verdict{font-size:1.5rem;font-weight:900;margin-bottom:.4rem}
 .verdict.ok{color:#0a6b5a}.verdict.bad{color:var(--coral)}
@@ -97,11 +103,16 @@ body{background:var(--navy);color:var(--white);font-family:Inter,sans-serif;heig
 </head>
 <body>
 <div class="bar">
-  <div class="logo">&#127914; Trivia<em> Circus</em></div>
+  <div class="logo">🎪 Trivia<em> Circus</em></div>
+  <div class="bar-identity">
+    <div id="myname" style="font-size:clamp(1.75rem,5vw,3rem);font-weight:900;line-height:1;letter-spacing:-.03em;color:var(--text);max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" aria-label="Your circus name"></div>
+    <div style="font-size:.7rem;color:var(--text-muted);font-weight:600;margin-top:.1rem">
+      <span id="myscore" aria-label="This game score">0 pts this game</span>
+      <span style="margin:0 .35rem">·</span>
+      <span id="mylifetime" style="color:var(--teal)" aria-label="All-time score" aria-live="polite"></span>
+    </div>
+  </div>
   <div class="qctr" id="qctr">Live</div>
-  <div class="myscore" id="myscore">0 pts</div>
-  <div class="mylifetime" id="mylifetime" aria-label="Lifetime score">Lifetime: 0</div>
-  <div class="myname" id="myname" aria-label="Your circus name"></div>
 </div>
 <div class="layout">
   <aside class="side">
@@ -165,8 +176,7 @@ body{background:var(--navy);color:var(--white);font-family:Inter,sans-serif;heig
 <div class="toast" id="tst"></div>
 <script src="/socket.io/socket.io.js"></script>
 <script>
-var P=new URLSearchParams(location.search),NAME=decodeURIComponent(P.get('name')||'');
-if(!NAME){location.href='index.html';throw 0}
+var NAME=''; // Identity comes from cookie profile (circus_profile event), not URL
 var socket=io({transports:['websocket','polling']});
 var myChoice=null,timerInt=null,nextInt=null,qStart=0,curQ=null;
 function G(id){return document.getElementById(id)}
@@ -174,9 +184,10 @@ function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 function show(id){['idle','question','reveal','syg'].forEach(function(p){G(p).style.display=p===id?'':'none'})}
 function toast(m,ms){var t=G('tst');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show')},ms||2200)}
 function announce(m,ms){var a=G('announce');a.textContent=m;a.classList.add('show');setTimeout(function(){a.classList.remove('show')},ms||3000)}
-socket.emit('join',{name:NAME});
+socket.emit('join',{}); // identity from cookie, not client-supplied name
 socket.on('joined',function(d){
-  NAME=d.name;updateP(d.presence||[]);
+  NAME=d.name||NAME;updateP(d.presence||[]);
+  if(d.profile && d.profile.name){ NAME=d.profile.name; var ne=G('myname'); if(ne)ne.textContent=NAME; }
   if(d.phase==='question'&&d.currentQuestion){loadQ(d.currentQuestion,d.currentQuestion.timeRemaining)}else show('idle');
 });
 socket.on('presence',function(d){updateP(d.players||[])});
@@ -205,7 +216,7 @@ function updateP(pl){
     list.appendChild(row);
   });
   var me = pl.find(function(p){return p.name === NAME});
-  if(me) G('myscore').textContent = (me.score||0)+'pts';
+  if(me) G('myscore').textContent = (me.score||0)+' pts this game';
 }
 socket.on('question',function(q){loadQ(q,q.timeMs);if(q.presence)updateP(q.presence);G('qctr').textContent='Q#'+((q.index||0)+1);clearInterval(nextInt)});
 function loadQ(q,timeMs){
@@ -370,14 +381,15 @@ function updateAllTimeBoard(board) {
 socket.on('circus_profile', function(p) {
   if (!p) return;
   myProfileId = p.id;
-  myLifetimeScore = p.lifetime_score || 0;
+  myLifetimeScore = p.lifetimeScore || 0;
+  NAME = p.name || p.display_name || NAME;
   var nameEl = G('myname');
-  if (nameEl) { nameEl.textContent = p.effective_name || p.display_name || ''; nameEl.style.display = ''; }
+  if (nameEl) nameEl.textContent = NAME;
   var lifEl = G('mylifetime');
-  if (lifEl && myLifetimeScore > 0) { lifEl.textContent = 'Lifetime: '+myLifetimeScore+'pts'; lifEl.style.display = ''; }
+  if (lifEl) lifEl.textContent = myLifetimeScore > 0 ? myLifetimeScore.toLocaleString()+' pts all-time' : 'Unranked';
 });
 socket.on('circus_leaderboard', function(d) {
-  if (d && d.leaderboard) updateAllTimeBoard(d.leaderboard);
+  if (d && (d.entries || d.leaderboard)) updateAllTimeBoard(d.entries || d.leaderboard);
   // Also refresh lifetime score if we appear
   if (d && d.leaderboard && myProfileId) {
     var me = d.leaderboard.find(function(p) { return p.id === myProfileId; });
