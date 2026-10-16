@@ -4,7 +4,7 @@
  */
 'use strict';
 const assert = require('assert');
-const { scoreRound, earnedTitle, clean, genName, CFG } = require('../server');
+const { earnedTitle, clean, genName, calculateTimeBonus, CFG } = require('../server');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -32,20 +32,7 @@ test('returns different names (probabilistic)', () => {
 // ── Scoring ───────────────────────────────────────────────────────────────────
 console.log('\n[Scoring logic]');
 
-function makeRoom(answers, withDD) {
-  const players = new Map();
-  const ansMap = new Map();
-  answers.forEach(function(a, i) {
-    const sid = 'p'+i;
-    players.set(sid, { name:'P'+i, score:0, streak: a.streak||0, doubleDown: a.dd||false,
-      stats:{ correct:0, wrong:0, oracle:0, fast:0, catWins:{} } });
-    ansMap.set(sid, { choice: a.choice, timeMs: a.timeMs||5000 });
-  });
-  return { players, answers: ansMap, questions:[{answer:'B', category:'History'}], currentQ:0,
-           settings:{ timerOff:false, standYourGround:true } };
-}
-
-// We can't easily call scoreRound (it uses io), so test earnedTitle instead
+// scoreRound uses Socket.IO state, so title and scoring helpers are tested directly.
 test('correct answer detected for earnedTitle', () => {
   const t = earnedTitle({ correct:10, wrong:0, oracle:0, fast:8, catWins:{} });
   assert.ok(['The Perfectionist','Brain Trust Elite'].includes(t.title));
@@ -78,13 +65,22 @@ test('Newcomer for zero answers', () => {
 
 // ── Config constants ──────────────────────────────────────────────────────────
 console.log('\n[Config]');
+test('QUESTION_MS is 30000', () => assert.strictEqual(CFG.QUESTION_MS, 30000));
 test('BASE_PTS is 100', () => assert.strictEqual(CFG.BASE_PTS, 100));
 test('TRUST_BONUS is 50', () => assert.strictEqual(CFG.TRUST_BONUS, 50));
 test('ORACLE_BONUS is 80', () => assert.strictEqual(CFG.ORACLE_BONUS, 80));
 test('DD_STAKE is 50', () => assert.strictEqual(CFG.DD_STAKE, 50));
 test('GRACE_MS is 7000 (one-handed friendly)', () => assert.strictEqual(CFG.GRACE_MS, 7000));
-test('Speed bonus is small relative to base (<=15%)', () => assert.ok(CFG.SPEED_BONUS / CFG.BASE_PTS <= 0.15));
-test('Trust bonus encourages accuracy not speed', () => assert.ok(CFG.TRUST_BONUS >= CFG.SPEED_BONUS));
+test('FIRST_CORRECT_BONUS is 50', () => assert.strictEqual(CFG.FIRST_CORRECT_BONUS, 50));
+test('Speed bonus starts at configured maximum', () => {
+  assert.strictEqual(calculateTimeBonus(0), CFG.SPEED_BONUS);
+});
+test('Speed bonus decreases progressively to zero', () => {
+  const halfway = calculateTimeBonus(CFG.QUESTION_MS / 2);
+  const nearDeadline = calculateTimeBonus(CFG.QUESTION_MS - 1);
+  assert.ok(halfway < CFG.SPEED_BONUS && halfway > nearDeadline);
+  assert.strictEqual(calculateTimeBonus(CFG.QUESTION_MS), 0);
+});
 
 // ── No-chat rule ──────────────────────────────────────────────────────────────
 console.log('\n[No-chat rule]');

@@ -4,7 +4,7 @@
  */
 'use strict';
 const assert = require('assert');
-const { clean, genName, earnedTitle, normalizeAnswer, validateAnswer, CFG, ALLOWED_EMOJIS, VALID_CHOICES } = require('../server');
+const { clean, genName, earnedTitle, normalizeAnswer, validateAnswer, calculateTimeBonus, CFG, ALLOWED_EMOJIS, VALID_CHOICES } = require('../server');
 
 let pass = 0, fail = 0;
 function test(name, fn) {
@@ -38,13 +38,18 @@ test('Reflex for fast answerer',           () => {
 });
 
 console.log('\n[Config — accuracy-first scoring]');
+test('QUESTION_MS = 30000',                  () => assert.strictEqual(CFG.QUESTION_MS, 30000));
 test('BASE_PTS = 100',                    () => assert.strictEqual(CFG.BASE_PTS, 100));
 test('TRUST_BONUS = 50',                  () => assert.strictEqual(CFG.TRUST_BONUS, 50));
 test('ORACLE_BONUS = 80',                 () => assert.strictEqual(CFG.ORACLE_BONUS, 80));
 test('DD_STAKE = 50',                     () => assert.strictEqual(CFG.DD_STAKE, 50));
 test('GRACE_MS = 7000 (one-handed ok)',   () => assert.strictEqual(CFG.GRACE_MS, 7000));
-test('Speed <= 10% of base',              () => assert.ok(CFG.SPEED_BONUS / CFG.BASE_PTS <= 0.1));
-test('Trust >= Speed (accuracy wins)',     () => assert.ok(CFG.TRUST_BONUS >= CFG.SPEED_BONUS));
+test('FIRST_CORRECT_BONUS = 50',          () => assert.strictEqual(CFG.FIRST_CORRECT_BONUS, 50));
+test('Speed bonus is progressive up to configured maximum', () => {
+  assert.strictEqual(calculateTimeBonus(0), CFG.SPEED_BONUS);
+  assert.ok(calculateTimeBonus(CFG.QUESTION_MS / 3) > calculateTimeBonus(2 * CFG.QUESTION_MS / 3));
+  assert.strictEqual(calculateTimeBonus(CFG.QUESTION_MS), 0);
+});
 
 console.log('\n[No free-text chat]');
 test('Exactly 4 allowed reactions',       () => assert.strictEqual(ALLOWED_EMOJIS.size, 4));
@@ -65,7 +70,19 @@ test('lowercase a not valid',             () => assert.ok(!VALID_CHOICES.has('a'
 console.log('\n[Typed answers]');
 test('normalization ignores case and extra spaces', () => assert.strictEqual(normalizeAnswer('  THE   Beatles '), 'the beatles'));
 test('normalization preserves misspellings', () => assert.notStrictEqual(normalizeAnswer('Beatels'), normalizeAnswer('Beatles')));
-test('typed answer payload is accepted', () => assert.deepStrictEqual(validateAnswer({answer:' Paris '}), {answer:'Paris'}));
+test('typed answer payload with round id is accepted', () => {
+  assert.deepStrictEqual(
+    validateAnswer({answer:' Paris ', roundId:'round-123', timeMs:1}),
+    {answer:'Paris', roundId:'round-123'}
+  );
+});
+test('client timeMs is ignored', () => {
+  assert.deepStrictEqual(
+    validateAnswer({answer:'Paris', roundId:'round-123', timeMs:CFG.QUESTION_MS}),
+    validateAnswer({answer:'Paris', roundId:'round-123', timeMs:0})
+  );
+});
+test('missing round id is rejected', () => assert.strictEqual(validateAnswer({answer:'Paris'}), null));
 test('legacy choice payload is rejected', () => assert.strictEqual(validateAnswer({choice:'A'}), null));
 
 console.log('\n[Question bank]');

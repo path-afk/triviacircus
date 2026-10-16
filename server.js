@@ -12,9 +12,20 @@ const path    = require('path');
 const fs           = require('fs');
 const crypto        = require('crypto');
 const cookieParser  = require('cookie-parser');
-const { generateToken, setCookie, getToken, tokenFromCookieHeader } = require('./lib/auth');
-const { getDb, getOrCreateProfile, regenerateName, recordScore, getLeaderboard, getProfileRank, publicProfile } = require('./lib/db');
+const {
+  generateToken, setCookie, clearGuestCookie, getToken, tokenFromCookieHeader,
+  setSessionCookie, clearSessionCookie, getSessionToken, sessionTokenFromCookieHeader,
+  validateUsername, validatePassword, hashPassword, verifyPassword, SESSION_MAX_AGE,
+} = require('./lib/auth');
+const {
+  getDb, getOrCreateProfile, getProfileByToken, regenerateName, recordScore,
+  getLeaderboard, getProfileRank, publicProfile, getAccountByUsername,
+  isRegisteredProfile, registerAccount, createSession, resolveSession, revokeSession,
+  mergeGuestIntoAccount,
+} = require('./lib/db');
 const names         = require('./lib/names');
+const { categoryBalancedShuffle } = require('./lib/question-order');
+const { PLAYER_STATUSES, validatePlayerStatus } = require('./lib/player-status');
 
 const app        = express();
 const httpServer = http.createServer(app);
@@ -23,7 +34,7 @@ const io         = new Server(httpServer, {
   transports: ['websocket', 'polling']
 });
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: '4kb', strict: true }));
 
 // ── Guest profile cookie middleware ──────────────────────────────────────────
 // Must come BEFORE express.static so Set-Cookie is included on static file responses.
@@ -31,11 +42,14 @@ app.use(express.json());
 // Token hash is stored server-side; raw token is never persisted.
 app.use((req, res, next) => {
   let token = getToken(req.cookies);
-  if (!token) {
+  const sessionToken = getSessionToken(req.cookies);
+  // Registered players do not need a guest credential until they log out.
+  if (!token && !sessionToken) {
     token = generateToken();
     setCookie(res, token);
   }
   req._tcToken = token;
+  req._tcSessionToken = sessionToken;
   next();
 });
 
@@ -57,34 +71,132 @@ function renameRateLimiter(req, res, next) {
   next();
 }
 
-// ── Persistence API ───────────────────────────────────────────────────────────
-// GET /api/profile — return this guest's persistent profile
+// ── Persistence / account API ─────────────────────────────────────────────────
+function requestIdentity(req, createGuest = true) {
+  const db = getDb();
+  const accountProfile = resolveSession(db, req._tcSessionToken);
+  if (accountProfile) return { db, profile: accountProfile, registered: true };
+  const guest = createGuest
+    ? getOrCreateProfile(db, req._tcToken || generateToken(), names.generate)
+    : getProfileByToken(db, req._tcToken);
+  return { db, profile: guest, registered: false };
+}
+
+function requireSameOrigin(req, res, next) {
+  const origin = req.get('origin');
+  if (!origin) return next();
+  try {
+    if (new URL(origin).host !== req.get('host')) return res.status(403).json({ error: 'Cross-origin request blocked' });
+  } catch (_) { return res.status(403).json({ error: 'Cross-origin request blocked' }); }
+  next();
+}
+
+const _authAttempts = new Map();
+function authRateLimited(req, username) {
+  const now = Date.now();
+  const key = (req.ip || req.socket.remoteAddress || 'unknown') + ':' + String(username || '').toLowerCase();
+  const recent = (_authAttempts.get(key) || []).filter(ts => now - ts < 15 * 60 * 1000);
+  recent.push(now);
+  _authAttempts.set(key, recent);
+  if (_authAttempts.size > 5000) {
+    for (const [k, list] of _authAttempts) if (!list.some(ts => now - ts < 15 * 60 * 1000)) _authAttempts.delete(k);
+  }
+  return recent.length > 10;
+}
+
+function publicIdentity(db, profile, registered) {
+  return publicProfile(profile, getProfileRank(db, profile.id), undefined, registered);
+}
+
+// GET /api/profile — return the current persistent guest or registered profile
 app.get('/api/profile', (req, res) => {
   try {
-    const db = getDb();
-    const raw = getOrCreateProfile(db, req._tcToken, names.generate);
-    const rank = getProfileRank(db, raw.id);
-    res.json(publicProfile(raw, rank));
+    const { db, profile, registered } = requestIdentity(req);
+    res.json(publicIdentity(db, profile, registered));
   } catch (e) { res.status(500).json({ error: 'Profile unavailable' }); }
 });
 
 // POST /api/profile/rename — regenerate display name (rate-limited, 5 s cooldown)
-app.post('/api/profile/rename', renameRateLimiter, (req, res) => {
+app.post('/api/profile/rename', requireSameOrigin, renameRateLimiter, (req, res) => {
+  try {
+    const { db, profile: raw, registered } = requestIdentity(req);
+    if (registered) return res.status(409).json({ error: 'Registered usernames cannot be regenerated.' });
+    regenerateName(db, raw.id, names.generate, raw.display_name);
+    const updated = db.prepare('SELECT * FROM profiles WHERE id = ?').get(raw.id);
+    res.json(publicIdentity(db, updated, false));
+  } catch (e) { res.status(500).json({ error: 'Rename failed' }); }
+});
+
+app.post('/api/auth/register', requireSameOrigin, async (req, res) => {
+  const username = validateUsername(req.body && req.body.username);
+  const password = validatePassword(req.body && req.body.password);
+  if (!username || !password) return res.status(400).json({ error: 'Use 3–24 letters, numbers, or underscores and a password of at least 8 characters.' });
+  if (authRateLimited(req, username)) return res.status(429).json({ error: 'Too many attempts. Please try again later.' });
+  try {
+    const { db, profile, registered } = requestIdentity(req);
+    if (registered) return res.status(409).json({ error: 'This profile already has an account.' });
+    if (getAccountByUsername(db, username)) return res.status(409).json({ error: 'That username is already taken.' });
+    const { salt, hash } = await hashPassword(password);
+    const updated = registerAccount(db, profile.id, username, salt, hash);
+    const sessionToken = generateToken();
+    createSession(db, updated.id, sessionToken, Math.floor(Date.now() / 1000) + SESSION_MAX_AGE);
+    setSessionCookie(res, sessionToken);
+    clearGuestCookie(res);
+    const player = circus.players.get(updated.id);
+    if (player) player.name = updated.display_name;
+    broadcast('presence', { players: presencePayload() });
+    res.status(201).json({ profile: publicIdentity(db, updated, true) });
+  } catch (e) {
+    if (/UNIQUE/.test(e.message)) return res.status(409).json({ error: 'That username is already taken.' });
+    console.error('[auth] register:', e.message);
+    res.status(500).json({ error: 'Account could not be created.' });
+  }
+});
+
+const _fakeSalt = Buffer.alloc(16, 7);
+const _fakeHash = Buffer.alloc(64, 11);
+app.post('/api/auth/login', requireSameOrigin, async (req, res) => {
+  const username = validateUsername(req.body && req.body.username);
+  const password = typeof (req.body && req.body.password) === 'string' ? req.body.password : '';
+  if (authRateLimited(req, username || 'invalid')) return res.status(429).json({ error: 'Too many attempts. Please try again later.' });
   try {
     const db = getDb();
-    const raw = getOrCreateProfile(db, req._tcToken, names.generate);
-    const newName = regenerateName(db, raw.id, names.generate, raw.display_name);
-    const updated = db.prepare('SELECT * FROM profiles WHERE id = ?').get(raw.id);
-    res.json(publicProfile(updated, getProfileRank(db, updated.id)));
-  } catch (e) { res.status(500).json({ error: 'Rename failed' }); }
+    const account = username ? getAccountByUsername(db, username) : null;
+    const valid = await verifyPassword(password, account ? account.password_salt : _fakeSalt, account ? account.password_hash : _fakeHash);
+    if (!account || !valid) return res.status(401).json({ error: 'Invalid username or password.' });
+
+    const guest = getProfileByToken(db, req._tcToken);
+    if (guest && guest.id !== account.id) {
+      if (circus.phase === 'question' && circus.eligibleProfileIds.has(guest.id)) {
+        return res.status(409).json({ error: 'Finish this question, then log in during the answer reveal.' });
+      }
+      disconnectProfile(guest.id);
+      mergeGuestIntoAccount(db, guest.id, account.id);
+    }
+    const merged = db.prepare('SELECT * FROM profiles WHERE id = ?').get(account.id);
+    const sessionToken = generateToken();
+    createSession(db, account.id, sessionToken, Math.floor(Date.now() / 1000) + SESSION_MAX_AGE);
+    setSessionCookie(res, sessionToken);
+    clearGuestCookie(res);
+    res.json({ profile: publicIdentity(db, merged, true) });
+  } catch (e) {
+    console.error('[auth] login:', e.message);
+    res.status(500).json({ error: 'Login unavailable.' });
+  }
+});
+
+app.post('/api/auth/logout', requireSameOrigin, (req, res) => {
+  try { if (req._tcSessionToken) revokeSession(getDb(), req._tcSessionToken); } catch (_) {}
+  clearSessionCookie(res);
+  clearGuestCookie(res);
+  res.status(204).end();
 });
 
 // GET /api/leaderboard?limit=N — all-time top N (scored players only, safe fields)
 app.get('/api/leaderboard', (req, res) => {
   try {
-    const db = getDb();
+    const { db, profile: myRaw } = requestIdentity(req);
     const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 25), 100);
-    const myRaw = req._tcToken ? getOrCreateProfile(db, req._tcToken, names.generate) : null;
     const entries = getLeaderboard(db, limit, myRaw?.id);
     res.json({ entries });
   } catch (e) { res.status(500).json({ error: 'Leaderboard unavailable' }); }
@@ -152,14 +264,15 @@ function loadQuestions() {
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const CFG = {
-  QUESTION_MS:   22000,
+  QUESTION_MS:   30000,
   REVEAL_MS:     5500,
   SYG_MS:        6000,   // Stand Your Ground window
   NEXT_DELAY_MS: 2000,
   IDLE_PAUSE_MS: 30000,
-  GRACE_MS:      7000,   // speed bonus cutoff (server-computed)
+  GRACE_MS:      7000,   // retained for title compatibility
   BASE_PTS:      100,
-  SPEED_BONUS:   10,
+  SPEED_BONUS:   100,    // maximum; decreases smoothly to 0 at the deadline
+  FIRST_CORRECT_BONUS: 50,
   STREAK_PER:    20,
   STREAK_CAP:    100,
   TRUST_BONUS:   50,
@@ -199,11 +312,11 @@ function validateJoin(data) {
 }
 function validateAnswer(data) {
   if (!data || typeof data !== 'object') return null;
-  if (typeof data.answer !== 'string') return null;
-  const answer = data.answer.trim().slice(0, CFG.MAX_ANSWER_LEN);
+  if (typeof data.answer !== 'string' || data.answer.length > CFG.MAX_ANSWER_LEN) return null;
+  if (typeof data.roundId !== 'string' || data.roundId.length < 1 || data.roundId.length > 80) return null;
+  const answer = data.answer.trim();
   if (!answer) return null;
-  // Ignore client timeMs — server computes elapsed
-  return { answer };
+  return { answer, roundId: data.roundId };
 }
 function normalizeAnswer(answer) {
   return String(answer || '')
@@ -213,6 +326,10 @@ function normalizeAnswer(answer) {
     .replace(/[–—]/g, '-')
     .trim()
     .replace(/\s+/g, ' ');
+}
+function calculateTimeBonus(elapsedMs) {
+  const elapsed = Math.min(Math.max(0, Number(elapsedMs) || 0), CFG.QUESTION_MS);
+  return Math.max(0, Math.ceil(CFG.SPEED_BONUS * (CFG.QUESTION_MS - elapsed) / CFG.QUESTION_MS));
 }
 function validateReaction(data) {
   if (!data || typeof data !== 'object') return null;
@@ -249,7 +366,9 @@ const circus = {
   players: new Map(),     // sid → PlayerState
   qIndex: -1,
   currentQ: null,
-  questionSentAt: 0,      // server-recorded, used for speed calc
+  questionSentAt: 0,      // wall clock for reconnect countdown
+  questionStartedMono: 0, // monotonic server clock for scoring/deadline
+  answerSeq: 0,           // deterministic order for first-correct bonus
   // Players who were connected when this question was sent — used for unanimity
   eligibleProfileIds: new Set(),
   answers: new Map(),     // sid → { choice, elapsedMs }
@@ -266,12 +385,10 @@ const circus = {
   profileSockets:   new Map(), // profileId → Set<socketId> (for same-cookie tab tracking)
 };
 
-function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
-
 function nextQuestion() {
   circus.poolIdx++;
   if (circus.poolIdx >= circus.pool.length) {
-    circus.pool = shuffle([...QUESTIONS]);
+    circus.pool = categoryBalancedShuffle(QUESTIONS);
     circus.poolIdx = 0;
   }
   return circus.pool[circus.poolIdx];
@@ -285,6 +402,7 @@ function presencePayload() {
   return connectedPlayers().map(p => ({
     name: p.name,
     score: p.score,
+    status: p.status || PLAYER_STATUSES[0],
     streak: p.streak,
     answered: circus.answers.has(p.profileId || p.id),
   }));
@@ -297,6 +415,27 @@ function leaderboard() {
 }
 
 function broadcast(event, data) { io.emit(event, data); }
+
+function disconnectProfile(profileId) {
+  const ids = [...(circus.profileSockets.get(profileId) || [])];
+  for (const socketId of ids) {
+    const active = io.sockets.sockets.get(socketId);
+    if (active) active.disconnect(true);
+  }
+  circus.profileSockets.delete(profileId);
+  circus.profileSocketMap.delete(profileId);
+  circus.players.delete(profileId);
+}
+
+function cleanupDisconnectedPlayers() {
+  for (const [profileId, player] of circus.players) {
+    const hasSockets = (circus.profileSockets.get(profileId)?.size || 0) > 0;
+    const roundStillNeedsPlayer =
+      (circus.phase === 'question' && circus.eligibleProfileIds.has(profileId)) ||
+      (circus.phase === 'reveal' && circus.roundEarned.has(profileId));
+    if (!player.connected && !hasSockets && !roundStillNeedsPlayer) circus.players.delete(profileId);
+  }
+}
 
 // ── Game loop ─────────────────────────────────────────────────────────────────
 function clearTimers() {
@@ -315,6 +454,8 @@ function startQuestion() {
   circus.currentQ = q;
   circus.roundId = crypto.randomUUID();
   circus.questionSentAt = Date.now();
+  circus.questionStartedMono = performance.now();
+  circus.answerSeq = 0;
   circus.answers.clear();
   circus.sygChoices.clear();
   circus.initialCorrect.clear();
@@ -329,6 +470,7 @@ function startQuestion() {
     text:  q.text,
     category: q.category,
     difficulty: q.difficulty,
+    roundId: circus.roundId,
     timeMs: CFG.QUESTION_MS,
     presence: presencePayload(),
   });
@@ -362,8 +504,16 @@ function revealRound() {
   const totalAnswered  = circus.answers.size;
   const totalEligible  = circus.eligibleProfileIds.size; // all eligible (incl. disconnected)
   let correctCount = 0;
-  circus.answers.forEach(a => {
-    if (normalizeAnswer(a.answer) === normalizedCorrect) correctCount += 1;
+  let firstCorrectProfileId = null;
+  let firstCorrectSeq = Infinity;
+  circus.answers.forEach((a, profileId) => {
+    if (normalizeAnswer(a.answer) === normalizedCorrect) {
+      correctCount += 1;
+      if (a.acceptedSeq < firstCorrectSeq) {
+        firstCorrectSeq = a.acceptedSeq;
+        firstCorrectProfileId = profileId;
+      }
+    }
   });
 
   // Trust Bonus: ALL eligible connected players answered AND all correct
@@ -388,19 +538,23 @@ function revealRound() {
     player.stats.wrong   = (player.stats.wrong   || 0) + (correct ? 0 : 1);
 
     if (correct) {
-      const speed  = a.elapsedMs <= CFG.GRACE_MS ? CFG.SPEED_BONUS : 0;
+      const speed  = calculateTimeBonus(a.elapsedMs);
+      const firstBonus = profileId === firstCorrectProfileId ? CFG.FIRST_CORRECT_BONUS : 0;
       const streak = Math.min((player.streak || 0) * CFG.STREAK_PER, CFG.STREAK_CAP);
       const trust  = isUnanimous ? CFG.TRUST_BONUS : 0;
       const dd     = player.doubleDown ? CFG.DD_STAKE : 0;
-      const earned = CFG.BASE_PTS + speed + streak + trust + dd;
+      const earned = CFG.BASE_PTS + speed + firstBonus + streak + trust + dd;
       player.score = (player.score || 0) + earned;
       player.streak = (player.streak || 0) + 1;
+      if (speed >= Math.ceil(CFG.SPEED_BONUS / 2)) player.stats.fast = (player.stats.fast || 0) + 1;
       if (!player.stats.catWins) player.stats.catWins = {};
       player.stats.catWins[q.category] = (player.stats.catWins[q.category] || 0) + 1;
       circus.initialCorrect.add(profileId);
       _roundEarned.set(profileId, { points: earned, correct: true });
       const _sid = (player && player.socketId) || profileId;
-      io.to(_sid).emit('answer_result', { correct: true, earned, speed, streak, trust, dd });
+      io.to(_sid).emit('answer_result', {
+        correct: true, earned, speed, firstBonus, streak, trust, dd, elapsedMs: Math.round(a.elapsedMs),
+      });
     } else {
       const _ddPenalty = player.doubleDown ? -CFG.DD_STAKE : 0;
       if (player.doubleDown) player.score = Math.max(0, (player.score || 0) - CFG.DD_STAKE);
@@ -416,6 +570,7 @@ function revealRound() {
     answer: correctAnswer,
     explanation: q.explanation,
     isUnanimous, correctCount, totalAnswered, totalEligible,
+    firstCorrectName: firstCorrectProfileId ? circus.players.get(firstCorrectProfileId)?.name || null : null,
     leaderboard: leaderboard(),
     presence: presencePayload(),
   });
@@ -483,6 +638,7 @@ function endRound() {
     circus.roundEarned.clear();
   }
 
+  cleanupDisconnectedPlayers();
   broadcast('round_end', { leaderboard: leaderboard() });
   if (connectedPlayers().length === 0) {
     circus.phase = 'idle';
@@ -494,13 +650,21 @@ function endRound() {
 
 // ── Socket events ─────────────────────────────────────────────────────────────
 
-// Socket.IO middleware — resolve or create guest profile from cookie
+// Socket.IO middleware — registered session first, then persistent guest cookie.
 io.use((socket, next) => {
   try {
     const header = socket.handshake.headers.cookie || '';
-    const token  = tokenFromCookieHeader(header) || generateToken();
-    const db     = getDb();
-    socket._tcProfile = getOrCreateProfile(db, token, names.generate);
+    const db = getDb();
+    const sessionToken = sessionTokenFromCookieHeader(header);
+    const sessionProfile = resolveSession(db, sessionToken);
+    if (sessionProfile) {
+      socket._tcProfile = sessionProfile;
+      socket._tcRegistered = true;
+    } else {
+      const token = tokenFromCookieHeader(header) || generateToken();
+      socket._tcProfile = getOrCreateProfile(db, token, names.generate);
+      socket._tcRegistered = false;
+    }
     socket.data.profileId = socket._tcProfile ? socket._tcProfile.id : null;
   } catch (e) {
     console.error('[persist] socket middleware error:', e.message);
@@ -541,7 +705,7 @@ io.on('connection', socket => {
         id: profileId || socket.id,
         socketId: socket.id,
         name: serverName,
-        score: 0, streak: 0, doubleDown: false, connected: true,
+        score: 0, status: PLAYER_STATUSES[0], streak: 0, doubleDown: false, connected: true,
         stats: { correct: 0, wrong: 0, oracle: 0, fast: 0, catWins: {} },
       };
       circus.players.set(profileId || socket.id, player);
@@ -558,7 +722,7 @@ io.on('connection', socket => {
     // Build join response with current state (blocker 2: no name from URL)
     const state = {
       name: serverName, phase: circus.phase, presence: presencePayload(), leaderboard: leaderboard(),
-      profile: profile ? publicProfile(profile, getProfileRank(getDb(), profile.id)) : null,
+      profile: profile ? publicProfile(profile, getProfileRank(getDb(), profile.id), undefined, !!socket._tcRegistered) : null,
     };
     if (circus.phase === 'question' && circus.currentQ) {
       const elapsed  = Date.now() - circus.questionSentAt;
@@ -567,6 +731,7 @@ io.on('connection', socket => {
         text: circus.currentQ.text,
         category: circus.currentQ.category,
         difficulty: circus.currentQ.difficulty,
+        roundId: circus.roundId,
         timeRemaining: remaining,
       };
     }
@@ -576,7 +741,7 @@ io.on('connection', socket => {
     // Emit persistent profile and all-time leaderboard to this client
     if (socket._tcProfile) {
       const _db = getDb();
-      socket.emit('circus_profile', publicProfile(socket._tcProfile, getProfileRank(_db, socket._tcProfile.id)));
+      socket.emit('circus_profile', publicProfile(socket._tcProfile, getProfileRank(_db, socket._tcProfile.id), undefined, !!socket._tcRegistered));
       try {
         const board = getLeaderboard(_db, 10);
         socket.emit('circus_leaderboard', { entries: getLeaderboard(_db, 10, socket._tcProfile?.id) });
@@ -590,23 +755,25 @@ io.on('connection', socket => {
     }
   });
 
-  socket.on('submit_answer', (rawData) => {
+  socket.on('submit_answer', (rawData, ack) => {
+    const respond = payload => { if (typeof ack === 'function') ack(payload); };
     const data = validateAnswer(rawData);
-    if (!data) return;
-    if (circus.phase !== 'question') return;
+    if (!data) return respond({ ok: false, error: 'Invalid answer.' });
+    if (circus.phase !== 'question') return respond({ ok: false, error: 'That round has ended.' });
+    if (data.roundId !== circus.roundId) return respond({ ok: false, error: 'That question is no longer active.' });
     const profileId = socket.data.profileId || socket.id;
     const player = circus.players.get(profileId);
-    if (!player) return;
-    // Check eligibility (must have been in circus at question start — blocker 5)
-    if (!circus.eligibleProfileIds.has(profileId)) return;
-    // One answer per profile per round (blocker 5)
-    if (circus.answers.has(profileId)) return;
+    if (!player) return respond({ ok: false, error: 'Join the circus first.' });
+    if (!circus.eligibleProfileIds.has(profileId)) return respond({ ok: false, error: 'You can answer the next question.' });
+    if (circus.answers.has(profileId)) return respond({ ok: true, duplicate: true });
 
-    // Server-side elapsed time — ignore client timeMs
-    const elapsedMs = Date.now() - circus.questionSentAt;
-    circus.answers.set(profileId, { answer: data.answer, elapsedMs });
+    // Monotonic server time controls both deadline and scoring; client timing is ignored.
+    const elapsedMs = performance.now() - circus.questionStartedMono;
+    if (elapsedMs < 0 || elapsedMs > CFG.QUESTION_MS) return respond({ ok: false, error: 'Time is up.' });
+    circus.answers.set(profileId, { answer: data.answer, elapsedMs, acceptedSeq: ++circus.answerSeq });
 
-    socket.emit('answer_locked', { answer: data.answer });
+    socket.emit('answer_locked', { answer: data.answer, roundId: circus.roundId });
+    respond({ ok: true });
     broadcast('presence', { players: presencePayload() });
 
     // Count for the bar display
@@ -660,6 +827,7 @@ io.on('connection', socket => {
       if (!profileId) return ack({ error: 'No authenticated profile' });
       const profile = socket._tcProfile;
       if (!profile) return ack({ error: 'Profile not loaded' });
+      if (socket._tcRegistered || isRegisteredProfile(getDb(), profileId)) return ack({ error: 'Registered usernames cannot be regenerated' });
       // Rate limit (reuse HTTP rate limiter timestamps map)
       const now = Date.now();
       const last = _renameTs.get(profileId);
@@ -674,7 +842,19 @@ io.on('connection', socket => {
       if (typeof ack === 'function') ack({ error: 'Rename failed' });
     }
   });
-socket.on('reaction', (rawData) => {
+  socket.on('set_status', (rawData, ack) => {
+    const data = validatePlayerStatus(rawData);
+    const respond = payload => { if (typeof ack === 'function') ack(payload); };
+    if (!data) return respond({ ok: false, error: 'Invalid status.' });
+    const profileId = socket.data.profileId || socket.id;
+    const player = circus.players.get(profileId);
+    if (!player || !player.connected) return respond({ ok: false, error: 'Join first.' });
+    player.status = data.status;
+    respond({ ok: true, status: data.status });
+    broadcast('presence', { players: presencePayload() });
+  });
+
+  socket.on('reaction', (rawData) => {
     const data = validateReaction(rawData);
     if (!data) return;
     const profileId = socket.data.profileId || socket.id;
@@ -722,17 +902,13 @@ socket.on('reaction', (rawData) => {
       }
     }
 
-    // Garbage-collect after grace period (only when no sockets remain)
-    setTimeout(() => {
-      const _pp = circus.players.get(profileId);
-      const _s  = (circus.profileSockets.get(profileId)?.size || 0) > 0;
-      if (_pp && !_pp.connected && !_s) circus.players.delete(profileId);
-    }, 15000);
+    // Never delete an eligible player before the round has been scored.
+    setTimeout(() => cleanupDisconnectedPlayers(), 15000);
   });
 });
 
 // ── Exports (for unit tests) ──────────────────────────────────────────────────
-module.exports = { clean, genName, earnedTitle, normalizeAnswer, validateAnswer, CFG, ALLOWED_EMOJIS, VALID_CHOICES };
+module.exports = { clean, genName, earnedTitle, normalizeAnswer, validateAnswer, calculateTimeBonus, CFG, ALLOWED_EMOJIS, VALID_CHOICES };
 
 // ── Server startup ────────────────────────────────────────────────────────────
 if (require.main === module) {
@@ -740,7 +916,7 @@ if (require.main === module) {
   const HOST = process.env.HOST || '0.0.0.0';
   QUESTIONS = loadQuestions();
   if (QUESTIONS.length === 0) { console.error('No questions available — aborting'); process.exit(1); }
-  circus.pool = shuffle([...QUESTIONS]);
+  circus.pool = categoryBalancedShuffle(QUESTIONS);
   circus.poolIdx = -1;
   httpServer.listen(PORT, HOST, () => {
     console.log('Trivia Circus server: http://' + HOST + ':' + PORT);

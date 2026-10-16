@@ -16,6 +16,7 @@ const { io } = require('socket.io-client');
 const ROOT = path.resolve(__dirname, '..');
 const CACHE = require('../importer/cache/open-trivia-qa.json');
 const FALLBACK = require('../questions/bank.json');
+const { CFG } = require('../server');
 const SAFE_NAME = /^[A-Z][a-z]+ [A-Z][a-z]+$/;
 const PROFANITY = /fuck|shit|bitch|cunt|dick|cock|pussy|nigger|faggot/i;
 
@@ -204,13 +205,24 @@ async function scoreOneRound(socket) {
   const question = await waitFor(socket, 'question', 7000);
   assert.equal(question.options, undefined, 'typed-answer rounds must not expose multiple-choice options');
   assert.equal(question.answer, undefined, 'question event must not expose the answer');
+  assert.equal(question.timeMs, CFG.QUESTION_MS, 'question event must use the configured round duration');
+  assert.equal(typeof question.roundId, 'string', 'question event must issue a round id');
+  assert.ok(question.roundId.length > 0, 'question event round id must not be empty');
   const resultPromise = waitFor(socket, 'answer_result', 7000);
   // B6: also gate on round_end so SQLite is committed before callers read it
   const roundEndPromise = new Promise(res => { socket.once('round_end', res); setTimeout(res, 9000); });
-  socket.emit('submit_answer', { answer: correctAnswer(question) });
+  socket.emit('submit_answer', {
+    answer: correctAnswer(question),
+    roundId: question.roundId,
+    timeMs: CFG.QUESTION_MS, // hostile client timing claim; server timing remains authoritative
+  });
   const result = await resultPromise;
   assert.equal(result.correct, true, 'published correct answer must be accepted');
   assert.ok(result.earned > 0, 'authoritative gameplay must award positive points');
+  assert.equal(result.firstBonus, CFG.FIRST_CORRECT_BONUS,
+    'the first correct answer must receive the configured first-correct bonus');
+  assert.ok(result.speed > 0 && result.speed <= CFG.SPEED_BONUS,
+    'server timing must ignore client timeMs and award no more than the configured speed bonus');
   await roundEndPromise;
   return result;
 }
@@ -445,11 +457,13 @@ test('concurrent duplicate submissions for one guest produce one atomic lifetime
       const answer = correctAnswer(received[0]);
       assert.ok(received.every(question => question.text === received[0].text),
         'concurrent tabs must receive the same round');
+      assert.ok(received.every(question => question.roundId === received[0].roundId),
+        'concurrent tabs must receive the same server-issued round id');
 
       const results = [];
       for (const socket of sockets) socket.on('answer_result', result => results.push(result));
-      await Promise.all(sockets.map(socket => new Promise(resolve => {
-        socket.emit('submit_answer', { answer });
+      await Promise.all(sockets.map((socket, index) => new Promise(resolve => {
+        socket.emit('submit_answer', { answer, roundId: received[index].roundId });
         setImmediate(resolve);
       })));
       let _poll;
