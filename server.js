@@ -26,6 +26,7 @@ const {
 const names         = require('./lib/names');
 const { categoryBalancedShuffle } = require('./lib/question-order');
 const { PLAYER_STATUSES, validatePlayerStatus } = require('./lib/player-status');
+const { createPrivateRoomManager } = require('./lib/private-rooms');
 const {
   HUMAN_COOKIE, HUMAN_MAX_AGE_MS, getHumanGateConfig, createHumanToken,
   verifyHumanToken, cookieValueFromHeader, verifyTurnstile,
@@ -46,6 +47,7 @@ const io         = new Server(httpServer, {
 });
 app.use(cookieParser());
 app.use(express.json({ limit: '4kb', strict: true }));
+const privateRooms = createPrivateRoomManager(io);
 
 // ── Guest profile cookie middleware ──────────────────────────────────────────
 // Must come BEFORE express.static so Set-Cookie is included on static file responses.
@@ -84,6 +86,13 @@ app.get('/api/owner/analytics', requireAdmin, (req, res) => {
   res.set('Cache-Control', 'no-store');
   const onlineIds = [...circus.profileSockets.entries()].filter(([, sockets]) => sockets.size > 0).map(([id]) => id);
   res.json(getAdminAnalytics(getDb(), onlineIds));
+});
+
+app.post('/api/rooms', requireSameOrigin, requireHuman, (req, res) => {
+  const created = privateRooms.create(req.body && req.body.passcode);
+  if (!created) return res.status(400).json({ error: 'Use a passcode between 4 and 128 characters.' });
+  res.set('Cache-Control', 'no-store');
+  res.status(201).json({ roomId: created.id, inviteUrl: '/game.html?room=' + encodeURIComponent(created.id) });
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -344,6 +353,13 @@ function loadQuestionsFromFallback() {
   }));
 }
 
+function setQuestions(next) {
+  QUESTIONS = Array.isArray(next) ? next : [];
+  privateRooms.setQuestions(QUESTIONS);
+  circus.pool = categoryBalancedShuffle(QUESTIONS);
+  circus.poolIdx = -1;
+}
+
 function loadQuestions() {
   const cache = loadQuestionsFromCache();
   if (cache && cache.length >= 100) {
@@ -507,7 +523,7 @@ function leaderboard() {
     .map(p => ({ name: p.name, score: p.score, streak: p.streak, ...earnedTitle(p.stats) }));
 }
 
-function broadcast(event, data) { io.emit(event, data); }
+function broadcast(event, data) { io.to('public').emit(event, data); }
 
 function disconnectProfile(profileId) {
   const ids = [...(circus.profileSockets.get(profileId) || [])];
@@ -775,6 +791,8 @@ io.use((socket, next) => {
 });
 
 io.on('connection', socket => {
+  socket.join('public');
+  privateRooms.attachSocket(socket);
 
   // Lightweight presence peek — no player created
   socket.on('peek', () => {
@@ -791,6 +809,23 @@ io.on('connection', socket => {
       const denial = { ok: false, code: 'HUMAN_VERIFICATION_REQUIRED', error: 'Human verification required.' };
       socket.emit('join_denied', denial);
       if (typeof ack === 'function') ack(denial);
+      return;
+    }
+    // Private admission happens only after the existing owner and human gates.
+    if (rawData && rawData.roomId) {
+      const profile = socket._tcProfile;
+      const result = privateRooms.join(socket, rawData, {
+        profileId: socket.data.profileId,
+        name: profile ? profile.display_name : genName(),
+        profile: profile ? publicProfile(profile, getProfileRank(getDb(), profile.id), undefined, !!socket._tcRegistered) : null,
+      });
+      if (!result.ok) {
+        socket.emit('join_denied', result);
+        if (typeof ack === 'function') ack(result);
+      } else {
+        socket.leave('public');
+        if (typeof ack === 'function') ack(result);
+      }
       return;
     }
     // Name from client is IGNORED — identity comes from the authenticated cookie profile
@@ -869,6 +904,7 @@ io.on('connection', socket => {
   });
 
   socket.on('submit_answer', (rawData, ack) => {
+    if (socket.data.privateRoomId) return;
     const respond = payload => { if (typeof ack === 'function') ack(payload); };
     if (!socket.data.joined) return respond({ ok: false, error: 'Join the circus first.' });
     const data = validateAnswer(rawData);
@@ -891,7 +927,7 @@ io.on('connection', socket => {
     broadcast('presence', { players: presencePayload() });
 
     // Count for the bar display
-    io.emit('answer_count', {
+    io.to('public').emit('answer_count', {
       count: [...circus.answers.keys()].filter(pid => circus.eligibleProfileIds.has(pid)).length,
       total: circus.eligibleProfileIds.size,
     });
@@ -900,6 +936,7 @@ io.on('connection', socket => {
   });
 
   socket.on('double_down', () => {
+    if (socket.data.privateRoomId) return;
     if (!socket.data.joined) return;
     if (circus.phase !== 'question') return;
     const profileId = socket.data.profileId || socket.id;
@@ -910,6 +947,7 @@ io.on('connection', socket => {
   });
 
   socket.on('stand_ground', (rawData) => {
+    if (socket.data.privateRoomId) return;
     if (!socket.data.joined) return;
     if (circus.phase !== 'syg') return;
     const profileId = socket.data.profileId || socket.id;
@@ -959,6 +997,7 @@ io.on('connection', socket => {
     }
   });
   socket.on('set_status', (rawData, ack) => {
+    if (socket.data.privateRoomId) return;
     const data = validatePlayerStatus(rawData);
     const respond = payload => { if (typeof ack === 'function') ack(payload); };
     if (!socket.data.joined) return respond({ ok: false, error: 'Join first.' });
@@ -972,6 +1011,7 @@ io.on('connection', socket => {
   });
 
   socket.on('reaction', (rawData) => {
+    if (socket.data.privateRoomId) return;
     if (!socket.data.joined) return;
     const data = validateReaction(rawData);
     if (!data) return;
@@ -982,6 +1022,7 @@ io.on('connection', socket => {
   });
 
   socket.on('disconnect', () => {
+    if (socket.data.privateRoomId) return;
     const profileId = socket.data.profileId || socket.id;
 
     // B3: remove this socket from the profile's active socket set
@@ -1027,16 +1068,14 @@ io.on('connection', socket => {
 });
 
 // ── Exports (for unit tests) ──────────────────────────────────────────────────
-module.exports = { clean, genName, earnedTitle, normalizeAnswer, validateAnswer, calculateTimeBonus, CFG, ALLOWED_EMOJIS, VALID_CHOICES };
+module.exports = { clean, genName, earnedTitle, normalizeAnswer, validateAnswer, calculateTimeBonus, CFG, ALLOWED_EMOJIS, VALID_CHOICES, app, httpServer, io, privateRooms, loadQuestions, setQuestions };
 
 // ── Server startup ────────────────────────────────────────────────────────────
 if (require.main === module) {
   const PORT = process.env.PORT || 3001;
   const HOST = process.env.HOST || '0.0.0.0';
-  QUESTIONS = loadQuestions();
+  setQuestions(loadQuestions());
   if (QUESTIONS.length === 0) { console.error('No questions available — aborting'); process.exit(1); }
-  circus.pool = categoryBalancedShuffle(QUESTIONS);
-  circus.poolIdx = -1;
   httpServer.listen(PORT, HOST, () => {
     console.log('Trivia Circus server: http://' + HOST + ':' + PORT);
     console.log('Questions:', QUESTIONS.length, '| Starting circus loop on join.');

@@ -161,6 +161,7 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
   </div>
   <div class="top-actions">
     <div class="live-pill" aria-label="Live game"><span class="live-dot" aria-hidden="true"></span><span>Live</span></div>
+    <button class="leaderboard-btn" id="inviteBtn" type="button" hidden onclick="inviteFriends()" aria-label="Invite friends to this private room"><span aria-hidden="true">↗</span><span>Invite Friends</span></button>
     <button class="leaderboard-btn" id="leaderboardBtn" type="button" aria-label="Open all-time leaderboard" aria-haspopup="dialog" aria-controls="leaderboardModal" aria-expanded="false" onclick="toggleLeaderboard()"><span aria-hidden="true">◆</span><span>Leaderboard</span></button>
     <button class="account-btn" id="accountBtn" type="button" aria-label="Open account" aria-haspopup="dialog" aria-controls="accountModal" aria-expanded="false" onclick="openAccount()">
       <span class="account-avatar" id="accountAvatar" aria-hidden="true">◉</span><span class="account-label" id="accountLabel">Account</span>
@@ -275,6 +276,14 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
     <div class="alltime-list" id="alb" role="list" aria-label="All-time leaderboard"></div>
   </section>
 </div>
+<div class="modal" id="roomGate" hidden aria-hidden="true">
+  <section class="modal-card human-card" role="dialog" aria-modal="true" aria-labelledby="roomTitle" tabindex="-1">
+    <div class="human-mark" aria-hidden="true">🔐</div><h2 id="roomTitle">Enter private room</h2>
+    <p class="modal-intro">Ask the host for the passcode. It is never included in the invite link.</p>
+    <form onsubmit="submitRoomPasscode(event)"><label for="roomPasscode">Room passcode</label><input id="roomPasscode" type="password" minlength="4" maxlength="128" autocomplete="off" required style="width:100%;min-height:48px;margin:.5rem 0;padding:.7rem"><button class="primary-wide" type="submit">Enter room</button></form>
+    <div class="human-error" id="roomError" role="alert" aria-live="assertive"></div>
+  </section>
+</div>
 <div class="modal human-gate" id="humanGate" hidden aria-hidden="true">
   <section class="modal-card human-card" role="dialog" aria-modal="true" aria-labelledby="humanTitle" aria-describedby="humanIntro" tabindex="-1">
     <div class="human-mark" aria-hidden="true">🎪</div>
@@ -287,6 +296,8 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 <script src="/socket.io/socket.io.js"></script>
 <script>
 var NAME='';
+var ROOM_ID=new URLSearchParams(window.location.search).get('room')||'';
+var roomPasscode='';
 var socket=io({transports:['websocket','polling'],autoConnect:false});
 var myAnswer=null,myCorrect=null,timerInt=null,nextInt=null,curQ=null,currentRoundId=null;
 var answerPending=false,answerResult=null,myLifetimeScore=0,accountProfile=null,authMode='register';
@@ -384,6 +395,7 @@ document.addEventListener('keydown',function(e){
   if(e.key==='Tab'){var items=Array.prototype.slice.call(active.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled])')).filter(function(item){return !item.closest('[hidden]')});if(!items.length)return;var first=items[0],last=items[items.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}
 });
 function connectToCircus(){
+  if(ROOM_ID&&!roomPasscode){showRoomGate();return}
   fetchProfile();
   if(socket.connected)return;
   if(typeof socket.connect==='function')socket.connect();
@@ -416,10 +428,16 @@ async function startHumanCheck(){
     widgetId=window.turnstile.render('#turnstileWidget',{sitekey:config.siteKey,action:'trivia-join',theme:'light',size:'flexible',callback:function(token){verifyHumanChallenge(token,widgetId)},'error-callback':function(){G('humanError').textContent='The ticket check could not load. Please retry.'},'expired-callback':function(){G('humanError').textContent='The check expired. Please try again.'}});
   }catch(err){showHumanGate();G('humanError').textContent=err&&err.message?err.message:'Ticket check unavailable. Please reload.'}
 }
-socket.on('connect',function(){socket.emit('join',{})});
+function showRoomGate(){var gate=G('roomGate');gate.hidden=false;gate.setAttribute('aria-hidden','false');document.querySelector('.topbar').inert=true;document.querySelector('.app-shell').inert=true;document.body.classList.add('modal-open');setTimeout(function(){G('roomPasscode').focus()},0)}
+function hideRoomGate(){var gate=G('roomGate');gate.hidden=true;gate.setAttribute('aria-hidden','true');document.querySelector('.topbar').inert=false;document.querySelector('.app-shell').inert=false;document.body.classList.remove('modal-open')}
+function submitRoomPasscode(e){e.preventDefault();roomPasscode=G('roomPasscode').value;G('roomError').textContent='';hideRoomGate();if(socket.connected)joinRoom();else socket.connect()}
+function joinRoom(){socket.emit('join',ROOM_ID?{roomId:ROOM_ID,passcode:roomPasscode}:{},function(result){if(result&&!result.ok&&ROOM_ID){roomPasscode='';G('roomPasscode').value='';showRoomGate();G('roomError').textContent=result.error||'Could not enter room.'}})}
+function inviteFriends(){var url=window.location.origin+window.location.pathname+'?room='+encodeURIComponent(ROOM_ID);if(navigator.share){navigator.share({title:'Join my Trivia Circus room',url:url}).catch(function(){})}else if(navigator.clipboard){navigator.clipboard.writeText(url).then(function(){toast('Invite link copied — send the passcode separately.')})}}
+socket.on('connect',joinRoom);
 socket.on('connect_error',function(err){if(err&&err.data&&err.data.code==='HUMAN_VERIFICATION_REQUIRED'){showHumanGate();G('humanError').textContent='Please complete the ticket check to enter.'}});
-socket.on('join_denied',function(err){if(err&&err.code==='HUMAN_VERIFICATION_REQUIRED'){showHumanGate();G('humanError').textContent='Please complete the ticket check to enter.'}});
+socket.on('join_denied',function(err){if(err&&err.code==='HUMAN_VERIFICATION_REQUIRED'){showHumanGate();G('humanError').textContent='Please complete the ticket check to enter.'}else if(ROOM_ID){roomPasscode='';G('roomPasscode').value='';showRoomGate();G('roomError').textContent=err&&err.error?err.error:'Could not enter room.'}});
 socket.on('joined',function(d){
+  if(d.privateRoom){G('inviteBtn').hidden=false;document.title='Private Room · Trivia Circus'}
   NAME=d.name||NAME;updateP(d.presence||[]);if(d.profile)applyProfile(d.profile);else if(NAME)G('myname').textContent=NAME;
   if(d.phase==='question'&&d.currentQuestion){loadQ(d.currentQuestion,d.currentQuestion.timeRemaining)}else show('idle');
 });

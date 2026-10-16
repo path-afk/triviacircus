@@ -102,6 +102,13 @@ footer{color:var(--text-muted);font-size:.72rem;text-align:center;margin-top:2re
     <p class="cookie-note">Score saved to this browser · No account needed</p>
     <hr aria-hidden="true">
     <button class="btn" id="enter-btn" onclick="enter()" aria-label="Enter the ring and start playing" disabled>Enter the Ring 🎪</button>
+    <hr aria-hidden="true">
+    <form id="room-form" onsubmit="createRoom(event)">
+      <label for="room-passcode" class="eyebrow">Private room passcode</label>
+      <input id="room-passcode" type="password" minlength="4" maxlength="128" autocomplete="new-password" required style="width:100%;min-height:48px;padding:.7rem;border:1.5px solid var(--border);border-radius:8px;margin:.4rem 0 .65rem">
+      <button class="btn btn-regen" id="create-room-btn" type="submit" style="margin:0">Create Private Room</button>
+      <p class="cookie-note" style="margin:.55rem 0 0">Share the invite link and passcode separately.</p>
+    </form>
     <div class="err" id="err" role="alert" aria-live="assertive"></div>
     <div class="cookie-warn" id="cookie-warn" role="status">⚠ Cookies appear to be blocked — your score cannot be saved across visits.</div>
   </div>
@@ -233,6 +240,17 @@ async function regenName() {
     }
   } catch(e) { showErr('Could not generate a new name. Try again.'); }
   finally { btn.disabled = false; btn.textContent = '🎲 Give me another name'; }
+}
+
+async function createRoom(e) {
+  e.preventDefault();
+  var passcode=document.getElementById('room-passcode').value;
+  var btn=document.getElementById('create-room-btn');btn.disabled=true;btn.textContent='Creating…';
+  try{
+    var r=await fetch('/api/rooms',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({passcode:passcode})});
+    var data=await r.json();if(!r.ok)throw new Error(data.error||'Could not create room.');
+    window.location.href=data.inviteUrl;
+  }catch(err){showErr(err.message||'Could not create room.');btn.disabled=false;btn.textContent='Create Private Room'}
 }
 
 function enter() {
