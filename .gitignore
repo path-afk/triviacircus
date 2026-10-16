@@ -3,3 +3,5 @@ node_modules/
 .env
 .DS_Store
 /tmp/
+# Keep importer/cache — it's the licensed production question data (CC BY-SA 4.0)
+# node_modules excluded above; cache intentionally included

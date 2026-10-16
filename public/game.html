@@ -123,13 +123,6 @@ body{background:var(--navy);color:var(--white);font-family:Inter,sans-serif;heig
       <div class="verdict" id="verdict" role="status"></div>
       <div class="expl" id="expl"></div>
       <div class="bars" id="bars"></div>
-      <div id="syg-panel" style="display:none;margin-bottom:.85rem;background:rgba(255,82,82,.07);border:1px solid rgba(255,82,82,.3);border-radius:10px;padding:1rem;text-align:center">
-        <div style="font-weight:800;margin-bottom:.5rem;color:#1a2a3a">The room is divided. Stand your ground?</div>
-        <div style="display:flex;gap:.75rem;justify-content:center">
-          <button id="syg-stay" class="rbtn" style="border-color:var(--teal);color:var(--teal)" onclick="chooseStand('stay')">Stand Ground</button>
-          <button id="syg-switch" class="rbtn" style="border-color:var(--amber);color:var(--amber)" onclick="chooseStand('switch')">Switch</button>
-        </div>
-      </div>
       <div class="next-banner">Next question in <span class="next-n" id="nextn">5</span>s</div>
       <div class="reactions">
         <button class="rbtn" onclick="react('Knew It')">Knew It</button>
@@ -140,6 +133,15 @@ body{background:var(--navy);color:var(--white);font-family:Inter,sans-serif;heig
     </section>
   </main>
 </div>
+    <section class="panel" id="syg" style="display:none;text-align:center">
+      <div style="font-size:1.1rem;font-weight:800;margin-bottom:.5rem">The room is divided.</div>
+      <div style="color:var(--dim);margin-bottom:1rem;font-size:.9rem">Stand your ground or pick a different answer?</div>
+      <div style="display:flex;gap:.75rem;justify-content:center;margin-bottom:.75rem">
+        <button id="syg-stay" class="rbtn" style="border-color:var(--teal);color:var(--teal)" onclick="chooseStand('stay')">Stand Ground</button>
+        <button id="syg-switch-btn" class="rbtn" style="border-color:var(--amber);color:var(--amber)" onclick="showSwitchChoices()">Switch Answer</button>
+      </div>
+      <div id="syg-panel" style="display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap"></div>
+    </section>
 <div class="rfeed" id="rfeed"></div>
 <div class="toast" id="tst"></div>
 <script src="/socket.io/socket.io.js"></script>
@@ -150,7 +152,7 @@ var socket=io({transports:['websocket','polling']});
 var myChoice=null,timerInt=null,nextInt=null,qStart=0,curQ=null;
 function G(id){return document.getElementById(id)}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
-function show(id){['idle','question','reveal'].forEach(function(p){G(p).style.display=p===id?'':'none'})}
+function show(id){['idle','question','reveal','syg'].forEach(function(p){G(p).style.display=p===id?'':'none'})}
 function toast(m,ms){var t=G('tst');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show')},ms||2200)}
 function announce(m,ms){var a=G('announce');a.textContent=m;a.classList.add('show');setTimeout(function(){a.classList.remove('show')},ms||3000)}
 socket.emit('join',{name:NAME});
@@ -192,6 +194,10 @@ function loadQ(q,timeMs){
   G('qcat').textContent=q.category||'';
   G('qtext').textContent=q.text||'';
   G('acount').textContent='';
+  // Reset SYG panel for fresh question
+  var sp=G('syg-panel');if(sp)sp.innerHTML='';
+  var ssb=G('syg-switch-btn');if(ssb){ssb.style.display='';ssb.disabled=false;}
+  var ss=G('syg-stay');if(ss)ss.disabled=false;
   var db=G('ddbtn');db.disabled=false;db.classList.remove('on');db.textContent='Double Down +-50pts';
   // Build options safely — DOM construction, no innerHTML interpolation
   var optsEl = G('opts');
@@ -275,12 +281,10 @@ socket.on('answer_count',function(d){
   if(d&&typeof d.count==='number') G('acount').textContent=d.count+' / '+d.total+' answered';
 });
 socket.on('stand_your_ground',function(d){
-  // SYG: explicit choice required — show prompt
-  broadcast_syg_panel();
+  show('syg');
 });
 socket.on('syg_locked',function(){
-  var stay=G('syg-stay'),sw=G('syg-switch');
-  if(stay)stay.disabled=true; if(sw)sw.disabled=true;
+  disableSYG();
 });
 function broadcast_syg_panel(){
   // Only show SYG panel if in reveal state; otherwise ignore
@@ -289,10 +293,36 @@ function broadcast_syg_panel(){
     if(panel)panel.style.display='block';
   }
 }
+function showSwitchChoices(){
+  // Show explicit per-choice buttons — do NOT emit yet (TC blocker #10)
+  var panel=G('syg-panel');
+  panel.innerHTML='';
+  ['A','B','C','D'].filter(function(k){return k!==myChoice}).forEach(function(k){
+    var btn=document.createElement('button');
+    btn.className='rbtn';
+    btn.dataset.choice=k;
+    btn.style.cssText='border-color:var(--amber);color:var(--amber)';
+    btn.textContent=k+(curQ&&curQ.options&&curQ.options[k]?': '+curQ.options[k]:'');
+    btn.onclick=function(){
+      myChoice=k;
+      socket.emit('stand_ground',{choice:k});
+      disableSYG();
+    };
+    panel.appendChild(btn);
+  });
+  G('syg-switch-btn').style.display='none';
+}
+function disableSYG(){
+  ['syg-stay','syg-switch-btn'].forEach(function(id){var b=G(id);if(b)b.disabled=true;});
+  [...G('syg-panel').querySelectorAll('button')].forEach(function(b){b.disabled=true;});
+}
 function chooseStand(decision){
-  socket.emit('stand_ground',{decision:decision});
-  var stay=G('syg-stay'),sw=G('syg-switch');
-  if(stay)stay.disabled=true; if(sw)sw.disabled=true;
+  if(decision==='stay'){
+    socket.emit('stand_ground',{decision:'stay'});
+    disableSYG();
+  } else {
+    showSwitchChoices();
+  }
 }
 function react(e){socket.emit('reaction',{emoji:e});toast(e)}
 socket.on('reaction',function(d){

@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-05-21T14:10:45+01:00",
+  "source": "OpenTriviaQA",
+  "sourceUrl": "https://github.com/uberspot/OpenTriviaQA",
+  "sourceRevision": "dcc1cdf36c2985ed5c849d1f2265c5041ffcdfb9",
+  "license": "CC BY-SA 4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+  "attribution": "OpenTriviaQA contributors; normalized by Trivia Circus",
+  "stats": {
+    "rejected": 28,
+    "deduped": 526,
+    "rejectionReasons": {
+      "duplicate-choices": 24,
+      "invalid-choices": 4
+    }
+  },
+  "rejections": [
+    {
+      "id": "otqa:animals:L6515",
+      "prompt": "This species, also known as Yaminon, is the largest wombat species on the planet.",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:celebrities:L6555",
+      "prompt": "Which popular Jules Verne character did Kirk Douglas portray in the 1954 movie 20,000 Leagues Under the Sea?",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:celebrities:L7977",
+      "prompt": "What year was the sixth album by The Cardigans, Super Extra Gravity, released?",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:celebrities:L14661",
+      "prompt": "How many movies, starring John Cazale, won an Academy Award for Best Picture?",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:celebrities:L16955",
+      "prompt": "From which college did American actress Debra Messing graduate?",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:geography:L2009",
+      "prompt": "The Pacific Ocean is the largest of the Earths oceanic divisions. Its name is derived from the Latin name Mare Pacificum which has the following meaning.",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:geography:L4376",
+      "prompt": "Where is Madagascar?",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:humanities:L861",
+      "prompt": "Fill in the blank with the correct word:",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:humanities:L2659",
+      "prompt": "Zoroastrianism refers to which of the following?",
+      "reason": "invalid-choices"
+    },
+    {
+      "id": "otqa:humanities:L6486",
+      "prompt": "Fill in the blank with the correct word:",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:movies:L24596",
+      "prompt": "What is Fletchs favorite team in the movie Fletch?",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:music:L33839",
+      "prompt": "Which set of lyrics arent in a Collin Raye song?",
+      "reason": "invalid-choices"
+    },
+    {
+      "id": "otqa:people:L7534",
+      "prompt": "Who revolutionized medical surgery by introducing sterilization?",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:people:L10333",
+      "prompt": "What author created fictional character Peter Blood whose exploits are reportedly based on the piratical exploits of Henry Morgan?",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:science-technology:L7923",
+      "prompt": "Which of these can be defined as a clones biological mother and father?",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:science-technology:L12068",
+      "prompt": "On average, how long is the sunspot cycle?",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:sports:L461",
+      "prompt": "Although this player was the 36th selected player drafted by the Philadelphia 76ers in 1978, he turned out to be the best point guard drafted that year.",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:sports:L14477",
+      "prompt": "Which country did the first World Champions in ice dance represent?",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:television:L7779",
+      "prompt": "Where did Jamie and Paul live on the hit television show Mad About You?",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:television:L15168",
+      "prompt": "When did The Fresh Prince of Bel-Air air?",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:television:L27138",
+      "prompt": "When did the TV show Hawaii Five-O originally air?",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:video-games:L713",
+      "prompt": "What unit says that in the game?",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:world:L10520",
+      "prompt": "Games of what popular US sport are usually part of the July 4th celebrations?",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:world:L21849",
+      "prompt": "This virtuoso cellist, who received his bachelors degree from Harvard in 1976, performed for President John F. Kennedy when he was seven.",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:world:L22394",
+      "prompt": "What British prime minister lived in Hughenden Manor, Buckinghamshire?",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:world:L29728",
+      "prompt": "What statement is true about the Prague Astronomical Clock?",
+      "reason": "invalid-choices"
+    },
+    {
+      "id": "otqa:world:L30561",
+      "prompt": "At the time of its construction this statue of Buddha was the tallest statue in the world.",
+      "reason": "duplicate-choices"
+    },
+    {
+      "id": "otqa:newest:L6059",
+      "prompt": "A friendship bloomed between Ms. Sara Creech and author Nora Hurston. Ms. Hurston came to Belle Glades to help with the creation of the Sara Lee doll. She was invited to stay at Ms. Creechs house but declined. Why?",
+      "reason": "invalid-choices"
+    }
+  ]
+}

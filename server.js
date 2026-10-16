@@ -20,116 +20,60 @@ const io         = new Server(httpServer, {
 app.use(express.static(path.join(__dirname, 'public')));
 
 
-// ── Live question fetcher ─────────────────────────────────────────────────────
-// Pulls from The Trivia API (free, no key) with OTDB as fallback.
-// Fetches 200+ questions at startup and top-ups when pool runs low.
-const https = require('https');
+// ── Question loader (production cache: OpenTriviaQA CC BY-SA 4.0) ──────────────
+// Reads from importer/cache/open-trivia-qa.json (prompt/choices/correctIndex schema).
+// Falls back to questions/bank.json (A/B/C/D schema) if cache unavailable.
 
-function fetchJSON(url) {
-  return new Promise((resolve, reject) => {
-    https.get(url, res => {
-      let data = '';
-      res.on('data', d => data += d);
-      res.on('end', () => { try { resolve(JSON.parse(data)); } catch(e) { reject(e); } });
-    }).on('error', reject);
+function loadQuestionsFromCache() {
+  const cachePath = path.join(__dirname, 'importer', 'cache', 'open-trivia-qa.json');
+  if (!fs.existsSync(cachePath)) return null;
+  const data  = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+  const items = data.questions || [];
+  const KEYS  = ['A', 'B', 'C', 'D'];
+  return items.map(q => {
+    // Rotate choices so correctIndex lands on a random position (runtime shuffle)
+    const choices = [...q.choices];
+    const correct = choices[q.correctIndex];
+    // Fisher-Yates with Math.random — not crypto but fine for gameplay
+    for (let i = choices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [choices[i], choices[j]] = [choices[j], choices[i]];
+    }
+    const newCorrectIdx = choices.indexOf(correct);
+    const options = {};
+    KEYS.forEach((k, i) => { options[k] = choices[i]; });
+    return {
+      id:          q.id,
+      category:    q.category,
+      difficulty:  q.difficulty === 'hard' ? 3 : q.difficulty === 'medium' ? 2 : 1,
+      text:        q.prompt,               // cache field 'prompt' → gameplay field 'text'
+      options,
+      answer:      KEYS[newCorrectIdx],    // A/B/C/D
+      explanation: '',
+      // Attribution/license metadata preserved (not shown mid-game)
+      _source:     q.source,
+      _license:    q.license,
+      _sourceUrl:  q.sourceUrl,
+    };
   });
 }
 
-function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
-
-function convertTriviaAPI(q) {
-  const answers = shuffle([...q.incorrectAnswers, q.correctAnswer]);
-  const keys = ['A','B','C','D'];
-  const options = {};
-  keys.forEach((k,i) => { options[k] = answers[i]; });
-  const correctKey = keys[answers.indexOf(q.correctAnswer)];
-  const catMap = { geography:'Geography', history:'History', science:'Science',
-    sport_and_leisure:'Sports', music:'Culture', film_and_tv:'Culture',
-    arts_and_literature:'Culture', general_knowledge:'General Knowledge',
-    society_and_culture:'Culture', food_and_drink:'Wild Card', science_and_nature:'Science' };
-  return {
-    id: q.id,
-    category: catMap[q.category] || q.category.replace(/_/g,' '),
-    difficulty: q.difficulty==='hard'?3:q.difficulty==='medium'?2:1,
-    text: q.question.text,
-    options, answer: correctKey,
-    explanation: ''
-  };
+function loadQuestionsFromFallback() {
+  const bankPath = path.join(__dirname, 'questions', 'bank.json');
+  if (!fs.existsSync(bankPath)) return [];
+  return JSON.parse(fs.readFileSync(bankPath, 'utf8'));
 }
 
-function convertOTDB(q) {
-  const dec = s => decodeURIComponent(s);
-  const answers = shuffle([...q.incorrect_answers.map(dec), dec(q.correct_answer)]);
-  const keys = ['A','B','C','D'];
-  const options = {};
-  keys.forEach((k,i) => { options[k] = answers[i]; });
-  const correctKey = keys[answers.indexOf(dec(q.correct_answer))];
-  return {
-    id: Math.random().toString(36).slice(2),
-    category: dec(q.category).replace(/Entertainment: |Science: /g,''),
-    difficulty: q.difficulty==='hard'?3:q.difficulty==='medium'?2:1,
-    text: dec(q.question), options, answer: correctKey, explanation: ''
-  };
+function loadQuestions() {
+  const cache = loadQuestionsFromCache();
+  if (cache && cache.length >= 100) {
+    console.log('Questions loaded from cache:', cache.length, '(OpenTriviaQA CC BY-SA 4.0)');
+    return cache;
+  }
+  const fb = loadQuestionsFromFallback();
+  console.log('Questions loaded from fallback bank:', fb.length);
+  return fb;
 }
-
-async function fetchFromTriviaAPI(count=100) {
-  const categories = ['history','geography','science','sport_and_leisure','music','arts_and_literature','general_knowledge'];
-  const perCat = Math.ceil(count/categories.length);
-  const results = [];
-  for (const cat of categories) {
-    try {
-      const url = 'https://the-trivia-api.com/v2/questions?limit='+perCat+'&categories='+cat+'&difficulties=medium,hard';
-      const qs = await fetchJSON(url);
-      results.push(...qs.map(convertTriviaAPI));
-      await new Promise(r => setTimeout(r, 300)); // respect rate limits
-    } catch(e) { console.warn('Trivia API fetch failed for', cat, e.message); }
-  }
-  return results;
-}
-
-async function fetchFromOTDB(count=100) {
-  const results = [];
-  for (let i = 0; i < 2; i++) {
-    try {
-      const url = 'https://opentdb.com/api.php?amount='+(count/2)+'&type=multiple&encode=url3986';
-      const data = await fetchJSON(url);
-      if (data.response_code === 0) results.push(...data.results.map(convertOTDB));
-      await new Promise(r => setTimeout(r, 1000));
-    } catch(e) { console.warn('OTDB fetch failed:', e.message); }
-  }
-  return results;
-}
-
-async function loadQuestions() {
-  console.log('Fetching questions from live trivia APIs...');
-  let questions = [];
-  try {
-    questions = await fetchFromTriviaAPI(140);
-    console.log('Fetched', questions.length, 'questions from The Trivia API');
-  } catch(e) {
-    console.warn('Trivia API failed, trying OTDB:', e.message);
-  }
-  if (questions.length < 60) {
-    try {
-      const otdbQs = await fetchFromOTDB(100);
-      questions = [...questions, ...otdbQs];
-      console.log('Added', otdbQs.length, 'questions from OTDB. Total:', questions.length);
-    } catch(e) { console.warn('OTDB also failed:', e.message); }
-  }
-  // Final fallback: local bank.json
-  if (questions.length < 20) {
-    console.warn('Live APIs unavailable — using local bank.json fallback');
-    const localPath = require('path').join(__dirname,'questions/bank.json');
-    if (require('fs').existsSync(localPath)) {
-      questions = JSON.parse(require('fs').readFileSync(localPath));
-    }
-  }
-  console.log('Question pool ready:', questions.length, 'questions');
-  return shuffle(questions);
-}
-
-// QUESTIONS loaded at startup via loadQuestions() below
-let QUESTIONS = [];
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const CFG = {
@@ -523,10 +467,24 @@ io.on('connection', socket => {
     const player = circus.players.get(socket.id);
     if (!player || !player.connected) return;
     if (!rawData || typeof rawData !== 'object') return;
-    const decision = rawData.decision;
-    if (decision !== 'stay' && decision !== 'switch') return;
-    circus.sygChoices.set(socket.id, decision);
-    socket.emit('syg_locked', { decision });
+    // Accept {decision:'stay'} OR {choice:'A'|'B'|'C'|'D'} (explicit switch target)
+    let finalChoice;
+    if (rawData.decision === 'stay') {
+      // Stay with original answer
+      const orig = circus.answers.get(socket.id);
+      finalChoice = orig ? orig.choice : null;
+      if (!finalChoice) return;
+      circus.sygChoices.set(socket.id, 'stay');
+    } else if (VALID_CHOICES.has(rawData.choice)) {
+      // Explicit switch to a specific answer
+      finalChoice = rawData.choice;
+      circus.sygChoices.set(socket.id, 'switch');
+    } else {
+      return; // invalid
+    }
+    circus.sygSwitchChoices = circus.sygSwitchChoices || new Map();
+    circus.sygSwitchChoices.set(socket.id, finalChoice);
+    socket.emit('syg_locked', { decision: rawData.decision || 'switch', choice: finalChoice });
   });
 
   socket.on('reaction', (rawData) => {
@@ -578,16 +536,12 @@ module.exports = { clean, genName, earnedTitle, CFG, ALLOWED_EMOJIS, VALID_CHOIC
 if (require.main === module) {
   const PORT = process.env.PORT || 3001;
   const HOST = process.env.HOST || '127.0.0.1';
-  loadQuestions().then(qs => {
-    QUESTIONS = qs;
-    circus.pool = [...QUESTIONS];
-    circus.poolIdx = -1;
-    httpServer.listen(PORT, HOST, () => {
-      console.log('Trivia Circus server: http://' + HOST + ':' + PORT);
-      console.log('Questions loaded:', QUESTIONS.length);
-    });
-  }).catch(err => {
-    console.error('Failed to load questions:', err);
-    process.exit(1);
+  QUESTIONS = loadQuestions();
+  if (QUESTIONS.length === 0) { console.error('No questions available — aborting'); process.exit(1); }
+  circus.pool = shuffle([...QUESTIONS]);
+  circus.poolIdx = -1;
+  httpServer.listen(PORT, HOST, () => {
+    console.log('Trivia Circus server: http://' + HOST + ':' + PORT);
+    console.log('Questions:', QUESTIONS.length, '| Starting circus loop on join.');
   });
 }
