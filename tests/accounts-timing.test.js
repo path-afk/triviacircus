@@ -88,7 +88,7 @@ test('database migration creates account and session schema', t => {
   assert.equal(tables.has('auth_sessions'), true);
   assert.equal(
     db.prepare('SELECT MAX(version) AS version FROM schema_migrations').get().version,
-    3,
+    5,
   );
 });
 

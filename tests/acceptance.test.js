@@ -407,7 +407,7 @@ test('name regeneration changes only the safe generated name and preserves ident
   });
 });
 
-test('persistent storage contains no email or IP address data', { timeout: 28000 }, async () => {
+test('untrusted gameplay data persists no email or IP address values', { timeout: 28000 }, async () => {
   const tmpRoot = process.env.TMPDIR || os.tmpdir();
   const dataDir = await fsp.mkdtemp(path.join(tmpRoot, 'trivia-no-pii-'));
   const server = await startServer(dataDir);
@@ -428,8 +428,8 @@ test('persistent storage contains no email or IP address data', { timeout: 28000
     const schemaResult = spawnSync('sqlite3', [database, '.schema'], { encoding: 'utf8' });
     assert.equal(schemaResult.status, 0, `SQLite schema must be readable: ${schemaResult.stderr}`);
     assert.doesNotMatch(schemaResult.stdout,
-      /\b(?:email|email_address|ip_address|remote_address|remote_addr|forwarded_for)\b/i,
-      'persistent schema must not contain email/IP fields');
+      /\b(?:ip_address|remote_address|remote_addr|forwarded_for)\b/i,
+      'persistent schema must not contain IP-address fields');
     for (const file of await listFiles(dataDir)) {
       const bytes = await fsp.readFile(file);
       assert.equal(bytes.includes(Buffer.from(emailCanary)), false, `email canary persisted in ${path.basename(file)}`);

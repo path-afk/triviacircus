@@ -21,7 +21,7 @@ const {
   getDb, getOrCreateProfile, getProfileByToken, regenerateName, recordScore,
   getLeaderboard, getProfileRank, publicProfile, getAccountByUsername,
   isRegisteredProfile, registerAccount, createSession, resolveSession, revokeSession,
-  mergeGuestIntoAccount,
+  mergeGuestIntoAccount, ensureOwnerAccount, bootstrapAdmin, isAdminProfile, recordAccountActivity, getAdminAnalytics,
 } = require('./lib/db');
 const names         = require('./lib/names');
 const { categoryBalancedShuffle } = require('./lib/question-order');
@@ -32,6 +32,11 @@ const {
 } = require('./lib/human-gate');
 
 const HUMAN_GATE = getHumanGateConfig();
+const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+const ADMIN_PASSWORD_SALT = /^[0-9a-f]{32}$/i.test(process.env.ADMIN_PASSWORD_SALT || '') ? Buffer.from(process.env.ADMIN_PASSWORD_SALT, 'hex') : null;
+const ADMIN_PASSWORD_HASH = /^[0-9a-f]{128}$/i.test(process.env.ADMIN_PASSWORD_HASH || '') ? Buffer.from(process.env.ADMIN_PASSWORD_HASH, 'hex') : null;
+
+if (ADMIN_EMAIL && ADMIN_PASSWORD_SALT && ADMIN_PASSWORD_HASH) ensureOwnerAccount(getDb(), ADMIN_EMAIL, ADMIN_PASSWORD_SALT, ADMIN_PASSWORD_HASH);
 
 const app        = express();
 const httpServer = http.createServer(app);
@@ -57,6 +62,28 @@ app.use((req, res, next) => {
   req._tcToken = token;
   req._tcSessionToken = sessionToken;
   next();
+});
+
+function requireAdmin(req, res, next) {
+  const db = getDb();
+  if (ADMIN_EMAIL) bootstrapAdmin(db, ADMIN_EMAIL);
+  const profile = resolveSession(db, req._tcSessionToken);
+  if (!profile || !isAdminProfile(db, profile.id)) return res.status(404).send('Not found');
+  req._tcAdminProfile = profile;
+  next();
+}
+
+app.get('/owner.html', (req, res) => res.status(404).send('Not found'));
+
+app.get('/owner', requireAdmin, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'public', 'owner.html'));
+});
+
+app.get('/api/owner/analytics', requireAdmin, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const onlineIds = [...circus.profileSockets.entries()].filter(([, sockets]) => sockets.size > 0).map(([id]) => id);
+  res.json(getAdminAnalytics(getDb(), onlineIds));
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -196,6 +223,7 @@ app.post('/api/auth/register', requireSameOrigin, requireHuman, async (req, res)
     const updated = registerAccount(db, profile.id, username, salt, hash);
     const sessionToken = generateToken();
     createSession(db, updated.id, sessionToken, Math.floor(Date.now() / 1000) + SESSION_MAX_AGE);
+    recordAccountActivity(db, updated.id, 'login');
     setSessionCookie(res, sessionToken);
     clearGuestCookie(res);
     const player = circus.players.get(updated.id);
@@ -212,7 +240,8 @@ app.post('/api/auth/register', requireSameOrigin, requireHuman, async (req, res)
 const _fakeSalt = Buffer.alloc(16, 7);
 const _fakeHash = Buffer.alloc(64, 11);
 app.post('/api/auth/login', requireSameOrigin, async (req, res) => {
-  const username = validateUsername(req.body && req.body.username);
+  const rawIdentifier = String((req.body && (req.body.email || req.body.username)) || '').trim();
+  const username = rawIdentifier.includes('@') ? rawIdentifier.toLowerCase() : validateUsername(rawIdentifier);
   const password = typeof (req.body && req.body.password) === 'string' ? req.body.password : '';
   if (authRateLimited(req, username || 'invalid')) return res.status(429).json({ error: 'Too many attempts. Please try again later.' });
   try {
@@ -232,6 +261,7 @@ app.post('/api/auth/login', requireSameOrigin, async (req, res) => {
     const merged = db.prepare('SELECT * FROM profiles WHERE id = ?').get(account.id);
     const sessionToken = generateToken();
     createSession(db, account.id, sessionToken, Math.floor(Date.now() / 1000) + SESSION_MAX_AGE);
+    recordAccountActivity(db, account.id, 'login');
     setSessionCookie(res, sessionToken);
     clearGuestCookie(res);
     res.json({ profile: publicIdentity(db, merged, true) });
@@ -242,7 +272,14 @@ app.post('/api/auth/login', requireSameOrigin, async (req, res) => {
 });
 
 app.post('/api/auth/logout', requireSameOrigin, (req, res) => {
-  try { if (req._tcSessionToken) revokeSession(getDb(), req._tcSessionToken); } catch (_) {}
+  try {
+    if (req._tcSessionToken) {
+      const db = getDb();
+      const profile = resolveSession(db, req._tcSessionToken);
+      if (profile) recordAccountActivity(db, profile.id, 'logout');
+      revokeSession(db, req._tcSessionToken);
+    }
+  } catch (_) {}
   clearSessionCookie(res);
   clearGuestCookie(res);
   res.status(204).end();
@@ -676,7 +713,11 @@ function endRound() {
       const _db = getDb();
       for (const [_pid, { points: _pts, correct: _cor }] of circus.roundEarned) {
         try {
-          const _new = recordScore(_db, _pid, circus.roundId, _pts, _cor);
+          const _answer = circus.answers.get(_pid);
+          const _new = recordScore(_db, _pid, circus.roundId, _pts, _cor, {
+            elapsedMs: _answer && _answer.elapsedMs,
+            category: circus.currentQ && circus.currentQ.category,
+          });
           if (_new) {
             // Refresh cached profile on socket
             const _sockId = circus.profileSocketMap.get(_pid);
@@ -741,6 +782,11 @@ io.on('connection', socket => {
   });
 
   socket.on('join', (rawData, ack) => {
+    if (socket._tcRegistered && isAdminProfile(getDb(), socket.data.profileId)) {
+      const denial = { ok: false, code: 'OWNER_ACCOUNT', error: 'Owner accounts do not join gameplay.' };
+      if (typeof ack === 'function') ack(denial);
+      return;
+    }
     if (!socket.data.humanVerified) {
       const denial = { ok: false, code: 'HUMAN_VERIFICATION_REQUIRED', error: 'Human verification required.' };
       socket.emit('join_denied', denial);
@@ -784,6 +830,7 @@ io.on('connection', socket => {
     }
     socket.data.name = serverName;
     socket.data.joined = true;
+    if (socket._tcRegistered) recordAccountActivity(getDb(), profileId, 'join');
 
     // Build join response with current state (blocker 2: no name from URL)
     const state = {
@@ -946,6 +993,7 @@ io.on('connection', socket => {
     // B3: if another socket for this profile is still open, stay live
     const _stillOpen = (circus.profileSockets.get(profileId)?.size || 0) > 0;
     if (_stillOpen) return;
+    if (socket._tcRegistered && socket.data.joined) recordAccountActivity(getDb(), profileId, 'disconnect');
 
     const player = circus.players.get(profileId);
     if (!player) return;
