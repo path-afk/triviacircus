@@ -38,7 +38,7 @@ test('Reflex for fast answerer',           () => {
 });
 
 console.log('\n[Config — accuracy-first scoring]');
-test('QUESTION_MS = 30000',                  () => assert.strictEqual(CFG.QUESTION_MS, 30000));
+test('QUESTION_MS = 45000',                  () => assert.strictEqual(CFG.QUESTION_MS, 45000));
 test('BASE_PTS = 100',                    () => assert.strictEqual(CFG.BASE_PTS, 100));
 test('TRUST_BONUS = 50',                  () => assert.strictEqual(CFG.TRUST_BONUS, 50));
 test('ORACLE_BONUS = 80',                 () => assert.strictEqual(CFG.ORACLE_BONUS, 80));

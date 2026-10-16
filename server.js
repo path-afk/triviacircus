@@ -320,7 +320,7 @@ function loadQuestions() {
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const CFG = {
-  QUESTION_MS:   30000,
+  QUESTION_MS:   45000,
   REVEAL_MS:     5500,
   SYG_MS:        6000,   // Stand Your Ground window
   NEXT_DELAY_MS: 2000,

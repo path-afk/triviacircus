@@ -65,7 +65,7 @@ test('Newcomer for zero answers', () => {
 
 // ── Config constants ──────────────────────────────────────────────────────────
 console.log('\n[Config]');
-test('QUESTION_MS is 30000', () => assert.strictEqual(CFG.QUESTION_MS, 30000));
+test('QUESTION_MS is 45000', () => assert.strictEqual(CFG.QUESTION_MS, 45000));
 test('BASE_PTS is 100', () => assert.strictEqual(CFG.BASE_PTS, 100));
 test('TRUST_BONUS is 50', () => assert.strictEqual(CFG.TRUST_BONUS, 50));
 test('ORACLE_BONUS is 80', () => assert.strictEqual(CFG.ORACLE_BONUS, 80));
