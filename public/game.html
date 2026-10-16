@@ -123,6 +123,13 @@ body{background:var(--navy);color:var(--white);font-family:Inter,sans-serif;heig
       <div class="verdict" id="verdict" role="status"></div>
       <div class="expl" id="expl"></div>
       <div class="bars" id="bars"></div>
+      <div id="syg-panel" style="display:none;margin-bottom:.85rem;background:rgba(255,82,82,.07);border:1px solid rgba(255,82,82,.3);border-radius:10px;padding:1rem;text-align:center">
+        <div style="font-weight:800;margin-bottom:.5rem;color:#1a2a3a">The room is divided. Stand your ground?</div>
+        <div style="display:flex;gap:.75rem;justify-content:center">
+          <button id="syg-stay" class="rbtn" style="border-color:var(--teal);color:var(--teal)" onclick="chooseStand('stay')">Stand Ground</button>
+          <button id="syg-switch" class="rbtn" style="border-color:var(--amber);color:var(--amber)" onclick="chooseStand('switch')">Switch</button>
+        </div>
+      </div>
       <div class="next-banner">Next question in <span class="next-n" id="nextn">5</span>s</div>
       <div class="reactions">
         <button class="rbtn" onclick="react('Knew It')">Knew It</button>
@@ -154,22 +161,61 @@ socket.on('joined',function(d){
 socket.on('presence',function(d){updateP(d.players||[])});
 socket.on('circus_idle',function(){show('idle')});
 function updateP(pl){
-  G('plist').innerHTML=pl.map(function(p){
-    var me=p.name===NAME;
-    return '<div class="prow'+(me?' me':'')+'" role="listitem"><div class="pav">'+esc(p.name[0].toUpperCase())+'</div>'+
-      '<div class="pinfo"><div class="pname">'+esc(p.name)+'</div><div class="pscore">'+(p.score||0)+'pts</div></div>'+
-      '<div class="pdot'+(p.answered?' on':'')+'"></div></div>';
-  }).join('');
-  var me=pl.find(function(p){return p.name===NAME});if(me)G('myscore').textContent=(me.score||0)+'pts';
+  var list = G('plist');
+  list.innerHTML = '';  // clear existing — player names never go into innerHTML template strings
+  pl.forEach(function(p){
+    var row = document.createElement('div');
+    row.className = 'prow' + (p.name === NAME ? ' me' : '');
+    row.setAttribute('role','listitem');
+    // Avatar — first character of name, safe via textContent
+    var av = document.createElement('div'); av.className = 'pav';
+    av.textContent = p.name.charAt(0).toUpperCase();  // single char, always safe
+    // Info
+    var info = document.createElement('div'); info.className = 'pinfo';
+    var nameEl = document.createElement('div'); nameEl.className = 'pname';
+    nameEl.textContent = p.name;  // textContent — XSS-safe
+    var scoreEl = document.createElement('div'); scoreEl.className = 'pscore';
+    scoreEl.textContent = (p.score||0) + 'pts';
+    info.appendChild(nameEl); info.appendChild(scoreEl);
+    // Dot
+    var dot = document.createElement('div');
+    dot.className = 'pdot' + (p.answered ? ' on' : '');
+    row.appendChild(av); row.appendChild(info); row.appendChild(dot);
+    list.appendChild(row);
+  });
+  var me = pl.find(function(p){return p.name === NAME});
+  if(me) G('myscore').textContent = (me.score||0)+'pts';
 }
 socket.on('question',function(q){loadQ(q,q.timeMs);if(q.presence)updateP(q.presence);G('qctr').textContent='Q#'+((q.index||0)+1);clearInterval(nextInt)});
 function loadQ(q,timeMs){
   curQ=q;myChoice=null;qStart=Date.now();
-  G('qcat').textContent=q.category;G('qtext').textContent=q.text;G('acount').textContent='';
+  G('qcat').textContent=q.category||'';
+  G('qtext').textContent=q.text||'';
+  G('acount').textContent='';
   var db=G('ddbtn');db.disabled=false;db.classList.remove('on');db.textContent='Double Down +-50pts';
-  G('opts').innerHTML=['A','B','C','D'].map(function(k){
-    return '<button class="opt" id="o'+k+'" onclick="pick(''+k+'')" aria-label="'+k+': '+esc(q.options[k])+'"><span class="okey">'+k+'</span><span>'+esc(q.options[k])+'</span></button>';
-  }).join('');
+  // Build options safely — DOM construction, no innerHTML interpolation
+  var optsEl = G('opts');
+  optsEl.innerHTML = '';
+  optsEl.onclick = null;
+  ['A','B','C','D'].forEach(function(k) {
+    var btn = document.createElement('button');
+    btn.className = 'opt';
+    btn.id = 'o' + k;  // k is always A/B/C/D — fixed set
+    btn.dataset.k = k;
+    btn.setAttribute('aria-label', k + ': ' + (q.options[k] || ''));
+    var keySpan = document.createElement('span');
+    keySpan.className = 'okey';
+    keySpan.textContent = k;
+    var txtSpan = document.createElement('span');
+    txtSpan.textContent = q.options[k] || '';
+    btn.appendChild(keySpan);
+    btn.appendChild(txtSpan);
+    optsEl.appendChild(btn);
+  });
+  optsEl.onclick = function(e) {
+    var btn = e.target.closest('.opt');
+    if (btn && btn.dataset.k) pick(btn.dataset.k);
+  };
   show('question');startTimer(Math.round((timeMs||22000)/1000));
 }
 function startTimer(s){
@@ -201,21 +247,60 @@ socket.on('reveal',function(d){
   G('verdict').className='verdict '+(ok?'ok':'bad');
   G('expl').textContent=d.explanation||'';
   ['A','B','C','D'].forEach(function(k){var b=G('o'+k);if(!b)return;b.classList.remove('sel');if(k===d.answer)b.classList.add('ok');else if(k===myChoice)b.classList.add('bad')});
-  G('bars').innerHTML=['A','B','C','D'].map(function(k){var r=k===d.answer;
-    return '<div class="bwrap'+(r?' right':'')+'"><div class="blbl"><span>'+k+'. '+esc((curQ&&curQ.options&&curQ.options[k])||'')+'</span><span>'+(d.pct[k]||0)+'%</span></div>'+
-    '<div class="bbg"><div class="bfill'+(r?' right':'')+'" style="width:'+(d.pct[k]||0)+'%"></div></div></div>';}).join('');
+  var barsEl = G('bars');
+  barsEl.innerHTML = '';
+  ['A','B','C','D'].forEach(function(k){
+    var r = k === d.answer;
+    var wrap = document.createElement('div'); wrap.className = 'bwrap' + (r?' right':'');
+    var lbl = document.createElement('div'); lbl.className = 'blbl';
+    var lspan = document.createElement('span');
+    lspan.textContent = k + '. ' + ((curQ&&curQ.options&&curQ.options[k])||'');
+    var rspan = document.createElement('span');
+    rspan.textContent = (d.pct[k]||0) + '%';
+    lbl.appendChild(lspan); lbl.appendChild(rspan);
+    var bg = document.createElement('div'); bg.className = 'bbg';
+    var fill = document.createElement('div');
+    fill.className = 'bfill' + (r?' right':'');
+    fill.style.width = (d.pct[k]||0) + '%';
+    bg.appendChild(fill); wrap.appendChild(lbl); wrap.appendChild(bg);
+    barsEl.appendChild(wrap);
+  });
   if(d.isUnanimous)announce('Unanimous! The whole circus got it right!',3500);
   if(d.leaderboard)updateP(d.leaderboard);
   var n=5;G('nextn').textContent=n;clearInterval(nextInt);
   nextInt=setInterval(function(){n--;G('nextn').textContent=n;if(n<=0)clearInterval(nextInt)},1000);
   show('reveal');
 });
-socket.on('answer_count',function(d){G('acount').textContent=d.count+' / '+d.total+' answered'});
+socket.on('answer_count',function(d){
+  if(d&&typeof d.count==='number') G('acount').textContent=d.count+' / '+d.total+' answered';
+});
+socket.on('stand_your_ground',function(d){
+  // SYG: explicit choice required — show prompt
+  broadcast_syg_panel();
+});
+socket.on('syg_locked',function(){
+  var stay=G('syg-stay'),sw=G('syg-switch');
+  if(stay)stay.disabled=true; if(sw)sw.disabled=true;
+});
+function broadcast_syg_panel(){
+  // Only show SYG panel if in reveal state; otherwise ignore
+  if(G('reveal')&&G('reveal').style.display!=='none'){
+    var panel=G('syg-panel');
+    if(panel)panel.style.display='block';
+  }
+}
+function chooseStand(decision){
+  socket.emit('stand_ground',{decision:decision});
+  var stay=G('syg-stay'),sw=G('syg-switch');
+  if(stay)stay.disabled=true; if(sw)sw.disabled=true;
+}
 function react(e){socket.emit('reaction',{emoji:e});toast(e)}
 socket.on('reaction',function(d){
+  if(!d||typeof d.name!=='string'||typeof d.emoji!=='string') return;
   var feed=G('rfeed'),el=document.createElement('div');
-  el.className='rpop';el.textContent=esc(d.name)+': '+d.emoji;
-  feed.appendChild(el);setTimeout(function(){el&&el.parentNode&&el.remove()},3800);
+  el.className='rpop';
+  el.textContent = d.name + ': ' + d.emoji;  // textContent — both safe
+  feed.appendChild(el);setTimeout(function(){if(el&&el.parentNode)el.remove()},3800);
 });
 show('idle');
 </script>
