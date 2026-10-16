@@ -280,6 +280,7 @@ test('[db P7] getLeaderboard orders ties deterministically', () => {
   const board = db.getLeaderboard(conn, 10);
   assert.strictEqual(board[0].name, 'Alpha');  // older score_reached_at wins
   assert.strictEqual(board[1].name, 'Beta');
+  assert.ok(board.every(entry => !('id' in entry)), 'public leaderboard entries must not expose ids');
   // Second tie-break: correct_answers DESC (but in new schema it's score_reached_at ASC)
   conn.prepare("INSERT INTO profiles (id,display_name,lifetime_score,correct_answers,score_reached_at,created_at) VALUES (?,?,100,2,1500,1500)").run('pid-gamma','Gamma');
   conn.prepare("INSERT INTO profile_credentials (token_hash,profile_id) VALUES (?,?)").run('t3'.padEnd(64,'0'),'pid-gamma');
@@ -375,7 +376,7 @@ test('[http P9] GET /api/profile returns profile with generated name and rank', 
     const profileRes = await httpRequest('GET', `http://127.0.0.1:${port}/api/profile`, { headers: { Cookie: cookie } });
     assert.strictEqual(profileRes.status, 200);
     const p = profileRes.body;
-    assert.ok(typeof p.id === 'string' && p.id.length > 0);
+    assert.ok(!('id' in p), 'public HTTP profile must not expose id');
     assert.ok(typeof p.name === 'string' && p.name.length > 0);
     assert.strictEqual(p.lifetimeScore, 0);
     assert.ok(p.rank === null || typeof p.rank === 'number');
@@ -441,7 +442,7 @@ test('[socket P12] join emits circus_profile with name and lifetime score', { ti
       assert.ok(profile, 'no circus_profile event received');
       assert.ok(typeof profile.name === 'string', 'no name');
       assert.ok(typeof profile.lifetimeScore === 'number', 'no lifetimeScore');
-      assert.ok(typeof profile.id === 'string', 'profile id must be a string');
+      assert.ok(!('id' in profile), 'public socket profile must not expose id');
     } finally { sock.disconnect(); }
   } finally { child.kill('SIGTERM'); await new Promise(r => child.once('exit', r)); }
 });
@@ -466,7 +467,8 @@ test('[socket P15] two clients with different cookies get distinct profiles', { 
         once(s1, 'circus_profile', 5000),
         once(s2, 'circus_profile', 5000),
       ]);
-      assert.notStrictEqual(p1.id, p2.id, 'same profile id — identities collided');
+      assert.notStrictEqual(p1.name, p2.name, 'distinct authenticated profiles must have distinct generated names');
+      assert.ok(!('id' in p1) && !('id' in p2), 'public socket profiles must not expose ids');
     } finally { s1.disconnect(); s2.disconnect(); }
   } finally { child.kill('SIGTERM'); await new Promise(r => child.once('exit', r)); }
 });

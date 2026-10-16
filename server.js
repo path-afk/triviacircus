@@ -84,7 +84,8 @@ app.get('/api/leaderboard', (req, res) => {
   try {
     const db = getDb();
     const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 25), 100);
-    const entries = getLeaderboard(db, limit);
+    const myRaw = req._tcToken ? getOrCreateProfile(db, req._tcToken, names.generate) : null;
+    const entries = getLeaderboard(db, limit, myRaw?.id);
     res.json({ entries });
   } catch (e) { res.status(500).json({ error: 'Leaderboard unavailable' }); }
 });
@@ -246,6 +247,7 @@ const circus = {
   roundId: null,    // UUID per question — idempotency key for lifetime score events
   roundEarned: new Map(),   // profileId → { points, correct } — accumulated until endRound
   profileSocketMap: new Map(), // profileId → socketId (current active socket)
+  profileSockets:   new Map(), // profileId → Set<socketId> (for same-cookie tab tracking)
 };
 
 function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
@@ -386,7 +388,7 @@ function revealRound() {
       player.streak = (player.streak || 0) + 1;
       if (!player.stats.catWins) player.stats.catWins = {};
       player.stats.catWins[q.category] = (player.stats.catWins[q.category] || 0) + 1;
-      circus.initialCorrect.add(sid);
+      circus.initialCorrect.add(profileId);
       _roundEarned.set(profileId, { points: earned, correct: true });
       const _sid = (player && player.socketId) || profileId;
       io.to(_sid).emit('answer_result', { correct: true, earned, speed, streak, trust, dd });
@@ -471,7 +473,7 @@ function endRound() {
         } catch (_e) { console.error('[persist] score error for', _pid, _e.message); }
       }
       // Broadcast updated all-time leaderboard
-      const _board = getLeaderboard(_db, 10);
+      const _board = getLeaderboard(_db, 10, null);
       broadcast('circus_leaderboard', { entries: _board });
     } catch (_err) { console.error('[persist] endRound error:', _err.message); }
     circus.roundEarned.clear();
@@ -540,7 +542,13 @@ io.on('connection', socket => {
       };
       circus.players.set(profileId || socket.id, player);
     }
-    if (profileId) circus.profileSocketMap.set(profileId, socket.id);
+    if (profileId) {
+      circus.profileSocketMap.set(profileId, socket.id);
+      // Track all sockets per profile for same-cookie tab safety (B3)
+      const _pSocks = circus.profileSockets.get(profileId) || new Set();
+      _pSocks.add(socket.id);
+      circus.profileSockets.set(profileId, _pSocks);
+    }
     socket.data.name = serverName;
 
     // Build join response with current state (blocker 2: no name from URL)
@@ -568,7 +576,7 @@ io.on('connection', socket => {
       socket.emit('circus_profile', publicProfile(socket._tcProfile, getProfileRank(_db, socket._tcProfile.id)));
       try {
         const board = getLeaderboard(_db, 10);
-        socket.emit('circus_leaderboard', { entries: board });
+        socket.emit('circus_leaderboard', { entries: getLeaderboard(_db, 10, socket._tcProfile?.id) });
       } catch (_) {}
     }
 
@@ -674,34 +682,48 @@ socket.on('reaction', (rawData) => {
 
   socket.on('disconnect', () => {
     const profileId = socket.data.profileId || socket.id;
+
+    // B3: remove this socket from the profile's active socket set
+    const _pSocks = circus.profileSockets.get(profileId);
+    if (_pSocks) {
+      _pSocks.delete(socket.id);
+      if (_pSocks.size === 0) circus.profileSockets.delete(profileId);
+    }
+    // B3: if another socket for this profile is still open, stay live
+    const _stillOpen = (circus.profileSockets.get(profileId)?.size || 0) > 0;
+    if (_stillOpen) return;
+
     const player = circus.players.get(profileId);
     if (!player) return;
     player.connected = false;
-    // Blocker 4: preserve accepted answers + eligibility on disconnect for scoring
     if (circus.profileSocketMap.get(profileId) === socket.id) {
       circus.profileSocketMap.delete(profileId);
     }
 
-    // Broadcast updated presence
     broadcast('presence', { players: presencePayload() });
 
-    // If in answering phase, check if remaining eligible players have all answered
     if (circus.phase === 'question') {
       checkAllAnswered();
-      // Also check if nobody left (timer-off safety: if 0 eligible, advance)
-      const eligibleConnected = [...circus.eligibleProfileIds].filter(pid => {
+      // B2: last player disconnected — score accepted answers if any exist
+      const _ec = [...circus.eligibleProfileIds].filter(pid => {
         const p = circus.players.get(pid); return p && p.connected;
       });
-      if (eligibleConnected.length === 0) {
-        clearTimeout(circus.timer);
-        endRound();
+      if (_ec.length === 0) {
+        clearTimers();
+        // Score if there are accepted answers; otherwise end cleanly
+        if (circus.answers.size > 0) {
+          revealRound();
+        } else {
+          endRound();
+        }
       }
     }
 
-    // Garbage-collect fully disconnected players after grace period
+    // Garbage-collect after grace period (only when no sockets remain)
     setTimeout(() => {
-      const p = circus.players.get(socket.id);
-      if (p && !p.connected) circus.players.delete(socket.id);
+      const _pp = circus.players.get(profileId);
+      const _s  = (circus.profileSockets.get(profileId)?.size || 0) > 0;
+      if (_pp && !_pp.connected && !_s) circus.players.delete(profileId);
     }, 15000);
   });
 });

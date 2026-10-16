@@ -356,7 +356,6 @@ function chooseStand(decision){
 }
 // ── Persistent profile + all-time leaderboard ──────────────────────────────
 var myLifetimeScore = 0;
-var myProfileId = null;
 function updateAllTimeBoard(board) {
   var el = G('alb');
   el.innerHTML = '';
@@ -369,34 +368,36 @@ function updateAllTimeBoard(board) {
     rank.className = 'alb-rank' + (p.rank <= 3 ? ' top' : '');
     rank.textContent = p.rank;
     var name = document.createElement('span');
-    name.className = 'alb-name' + (p.id === myProfileId ? ' me' : '');
-    name.textContent = p.effective_name || p.display_name || '?';
+    // isYou flag from server — no UUID exposed
+    name.className = 'alb-name' + (p.isYou ? ' me' : '');
+    name.textContent = p.name || '?';
     var pts = document.createElement('span');
     pts.className = 'alb-pts';
-    pts.textContent = p.lifetime_score + 'pts';
+    pts.textContent = (p.score || 0).toLocaleString() + ' pts';
     row.appendChild(rank); row.appendChild(name); row.appendChild(pts);
     el.appendChild(row);
   });
 }
 socket.on('circus_profile', function(p) {
   if (!p) return;
-  myProfileId = p.id;
+  // No UUID from server — identify by isYou flag and name
   myLifetimeScore = p.lifetimeScore || 0;
-  NAME = p.name || p.display_name || NAME;
+  NAME = p.name || NAME;
   var nameEl = G('myname');
   if (nameEl) nameEl.textContent = NAME;
   var lifEl = G('mylifetime');
   if (lifEl) lifEl.textContent = myLifetimeScore > 0 ? myLifetimeScore.toLocaleString()+' pts all-time' : 'Unranked';
 });
 socket.on('circus_leaderboard', function(d) {
-  if (d && (d.entries || d.leaderboard)) updateAllTimeBoard(d.entries || d.leaderboard);
-  // Also refresh lifetime score if we appear
-  if (d && d.leaderboard && myProfileId) {
-    var me = d.leaderboard.find(function(p) { return p.id === myProfileId; });
+  var entries = d && (d.entries || d.leaderboard);
+  if (entries) {
+    updateAllTimeBoard(entries);
+    // Refresh lifetime score using isYou flag (no UUID lookup)
+    var me = entries.find(function(p) { return p.isYou; });
     if (me) {
-      myLifetimeScore = me.lifetime_score;
+      myLifetimeScore = me.score || 0;
       var lifEl = G('mylifetime');
-      if (lifEl) { lifEl.textContent = 'Lifetime: '+myLifetimeScore+'pts'; lifEl.style.display = myLifetimeScore > 0 ? '' : 'none'; }
+      if (lifEl) lifEl.textContent = myLifetimeScore > 0 ? myLifetimeScore.toLocaleString()+' pts all-time' : 'Unranked';
     }
   }
 });

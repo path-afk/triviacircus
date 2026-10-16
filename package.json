@@ -19,5 +19,8 @@
   "devDependencies": {
     "jsdom": "^26.1.0",
     "socket.io-client": "^4.7.2"
+  },
+  "engines": {
+    "node": ">=22.5.0"
   }
 }

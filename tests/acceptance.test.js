@@ -163,7 +163,7 @@ async function join(socket, payload = {}) {
   socket.emit('join', payload);
   const state = await joined;
   assert.ok(state && state.profile, 'joined payload must include persistent profile');
-  assert.equal(typeof state.profile.id, 'string', 'profile.id must be an opaque string');
+  assert.ok(!('id' in state.profile), 'public profile must not expose an id');
   assert.equal(typeof state.profile.name, 'string', 'profile.name must be a string');
   assert.equal(typeof state.profile.lifetimeScore, 'number', 'profile.lifetimeScore must be numeric');
   return state;
@@ -206,10 +206,13 @@ function correctChoice(question) {
 async function scoreOneRound(socket) {
   const question = await waitFor(socket, 'question', 7000);
   const resultPromise = waitFor(socket, 'answer_result', 7000);
+  // B6: also gate on round_end so SQLite is committed before callers read it
+  const roundEndPromise = new Promise(res => { socket.once('round_end', res); setTimeout(res, 9000); });
   socket.emit('submit_answer', { choice: correctChoice(question) });
   const result = await resultPromise;
   assert.equal(result.correct, true, 'published correct answer must be accepted');
   assert.ok(result.earned > 0, 'authoritative gameplay must award positive points');
+  await roundEndPromise;
   return result;
 }
 
@@ -255,7 +258,7 @@ async function findDatabase(dataDir) {
   return databases[0];
 }
 
-test('same browser receives one opaque hardened cookie and keeps one identity across reconnect/rejoin', async () => {
+test('same browser receives one opaque hardened cookie and keeps one identity across reconnect/rejoin', { timeout: 28000 }, async () => {
   await withServer(async ({ port }) => {
     const { setCookie, cookie } = await issueCookie(port);
     assert.match(setCookie, /;\s*HttpOnly\b/i, 'identity cookie must be HttpOnly');
@@ -272,13 +275,15 @@ test('same browser receives one opaque hardened cookie and keeps one identity ac
     const b = await connectClient(port, cookie);
     try {
       const [joinedA, joinedB] = await Promise.all([join(a), join(b)]);
-      assert.equal(joinedA.profile.id, first.id);
-      assert.equal(joinedB.profile.id, first.id);
+      assert.deepEqual(joinedA.profile, first,
+        'first concurrent tab must receive the authenticated public profile state');
+      assert.deepEqual(joinedB.profile, first,
+        'second concurrent tab must receive the authenticated public profile state');
       assert.equal(joinedA.profile.name, first.name);
       assert.equal(joinedB.profile.name, first.name);
       const entries = await leaderboard(port, 100);
-      assert.equal(entries.filter(entry => entry.id === first.id).length, 1,
-        'reconnects and concurrent tabs must not duplicate a profile');
+      assert.equal(entries.filter(entry => entry.name === first.name).length, 0,
+        'unscored authenticated profiles must not appear on the public leaderboard');
     } finally {
       a.disconnect();
       b.disconnect();
@@ -286,7 +291,7 @@ test('same browser receives one opaque hardened cookie and keeps one identity ac
   });
 });
 
-test('server assigns a stable whimsical adjective-animal name and ignores supplied HTML/profanity', async () => {
+test('server assigns a stable whimsical adjective-animal name and ignores supplied HTML/profanity', { timeout: 28000 }, async () => {
   await withServer(async ({ port }) => {
     const hostile = '<img src=x onerror=alert(1)> fuck';
     const guest = await createGuest(port, { name: hostile });
@@ -301,7 +306,7 @@ test('server assigns a stable whimsical adjective-animal name and ignores suppli
   });
 });
 
-test('lifetime score is changed only by server-authoritative gameplay and survives process restart', async () => {
+test('lifetime score is changed only by server-authoritative gameplay and survives process restart', { timeout: 28000 }, async () => {
   const tmpRoot = process.env.TMPDIR || os.tmpdir();
   const dataDir = await fsp.mkdtemp(path.join(tmpRoot, 'trivia-restart-'));
   let server = await startServer(dataDir);
@@ -323,11 +328,10 @@ test('lifetime score is changed only by server-authoritative gameplay and surviv
     await stopServer(server);
     server = await startServer(dataDir);
     const restarted = await reconnectProfile(server.port, identity.cookie);
-    assert.equal(restarted.id, scored.id, 'profile identity must survive process restart');
-    assert.equal(restarted.name, scored.name, 'profile name must survive process restart');
+    assert.equal(restarted.name, scored.name, 'authenticated profile name must survive process restart');
     assert.equal(restarted.lifetimeScore, scored.lifetimeScore, 'lifetime score must survive process restart');
     const entries = await leaderboard(server.port, 10);
-    assert.ok(entries.some(entry => entry.id === scored.id && entry.score === scored.lifetimeScore),
+    assert.ok(entries.some(entry => entry.name === scored.name && entry.score === scored.lifetimeScore),
       'all-time leaderboard must be rebuilt from durable score data');
     await findDatabase(dataDir);
   } finally {
@@ -337,7 +341,7 @@ test('lifetime score is changed only by server-authoritative gameplay and surviv
   }
 });
 
-test('all-time leaderboard retains disconnected guests and applies deterministic top-N tie ordering', async () => {
+test('all-time leaderboard retains disconnected guests and applies deterministic top-N tie ordering', { timeout: 28000 }, async () => {
   await withServer(async ({ port }) => {
     await leaderboard(port, 100); // prove the all-time API exists before arranging tie fixtures
     const guests = [];
@@ -361,7 +365,7 @@ test('all-time leaderboard retains disconnected guests and applies deterministic
   });
 });
 
-test('name regeneration changes only the safe generated name and preserves identity and score', async () => {
+test('name regeneration changes only the safe generated name and preserves identity and score', { timeout: 28000 }, async () => {
   await withServer(async ({ port }) => {
     const identity = await browserCookie(port);
     const socket = await connectClient(port, identity.cookie);
@@ -369,7 +373,6 @@ test('name regeneration changes only the safe generated name and preserves ident
     socket.emit('join', {});
     const joinedState = await joinedPromise;
     const original = joinedState.profile || {
-      id: joinedState.name,
       name: joinedState.name,
       lifetimeScore: 0,
     };
@@ -381,7 +384,7 @@ test('name regeneration changes only the safe generated name and preserves ident
       });
       assert.ok(response && response.profile, 'regenerate_name ack must contain profile');
       const after = response.profile;
-      assert.equal(after.id, original.id, 'name regeneration must preserve profile id');
+      assert.ok(!('id' in after), 'regenerated public profile must not expose an id');
       assert.notEqual(after.name, original.name, 'name regeneration must choose a new name');
       assertSafeGeneratedName(after.name);
       assert.equal(after.lifetimeScore, result.earned, 'name regeneration must preserve lifetime score');
@@ -393,7 +396,7 @@ test('name regeneration changes only the safe generated name and preserves ident
   });
 });
 
-test('persistent storage contains no email or IP address data', async () => {
+test('persistent storage contains no email or IP address data', { timeout: 28000 }, async () => {
   const tmpRoot = process.env.TMPDIR || os.tmpdir();
   const dataDir = await fsp.mkdtemp(path.join(tmpRoot, 'trivia-no-pii-'));
   const server = await startServer(dataDir);
@@ -428,14 +431,16 @@ test('persistent storage contains no email or IP address data', async () => {
   }
 });
 
-test('concurrent duplicate submissions for one guest produce one atomic lifetime-score update', async () => {
+test('concurrent duplicate submissions for one guest produce one atomic lifetime-score update', { timeout: 28000 }, async () => {
   await withServer(async ({ port }) => {
     const identity = await browserCookie(port);
     const sockets = await Promise.all(Array.from({ length: 8 }, () => connectClient(port, identity.cookie)));
     try {
       const joined = await Promise.all(sockets.map(socket => join(socket)));
-      assert.equal(new Set(joined.map(state => state.profile.id)).size, 1,
-        'all concurrent tabs must resolve to one profile');
+      assert.ok(joined.every(state => state.profile.name === joined[0].profile.name),
+        'all concurrent tabs must resolve to one authenticated profile name');
+      assert.ok(joined.every(state => JSON.stringify(state.profile) === JSON.stringify(joined[0].profile)),
+        'all concurrent tabs must receive the same public profile state');
       const questions = sockets.map(socket => waitFor(socket, 'question', 7000));
       const received = await Promise.all(questions);
       const choice = correctChoice(received[0]);
@@ -448,25 +453,28 @@ test('concurrent duplicate submissions for one guest produce one atomic lifetime
         socket.emit('submit_answer', { choice });
         setImmediate(resolve);
       })));
+      let _poll;
       await Promise.race([
         new Promise(resolve => {
-          const poll = setInterval(() => {
-            if (results.length > 0) {
-              clearInterval(poll);
-              resolve();
-            }
+          _poll = setInterval(() => {
+            if (results.length > 0) { clearInterval(_poll); _poll = null; resolve(); }
           }, 10);
         }),
         timeout(7000, 'authoritative answer result timeout'),
-      ]);
+      ]).finally(() => { if (_poll) { clearInterval(_poll); _poll = null; } });
       const earned = results[0].earned;
       assert.ok(earned > 0);
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // B6: persistence happens in endRound — await round_end before reading DB
+      await new Promise((res, rej) => {
+        const t = setTimeout(() => res(), 8000);
+        sockets[0].once('round_end', () => { clearTimeout(t); res(); });
+      });
       const profile = await reconnectProfile(port, identity.cookie);
       assert.equal(profile.lifetimeScore, earned,
         'concurrent submissions must commit exactly one score increment');
       const entries = await leaderboard(port, 100);
-      assert.equal(entries.filter(entry => entry.id === profile.id).length, 1,
+      // No UUID in public leaderboard; check by name (unique per design)
+      assert.equal(entries.filter(entry => entry.name === profile.name).length, 1,
         'concurrent tabs must not create duplicate leaderboard rows');
     } finally {
       for (const socket of sockets) socket.disconnect();
