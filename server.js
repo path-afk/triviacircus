@@ -734,7 +734,7 @@ module.exports = { clean, genName, earnedTitle, CFG, ALLOWED_EMOJIS, VALID_CHOIC
 // ── Server startup ────────────────────────────────────────────────────────────
 if (require.main === module) {
   const PORT = process.env.PORT || 3001;
-  const HOST = process.env.HOST || '127.0.0.1';
+  const HOST = process.env.HOST || '0.0.0.0';
   QUESTIONS = loadQuestions();
   if (QUESTIONS.length === 0) { console.error('No questions available — aborting'); process.exit(1); }
   circus.pool = shuffle([...QUESTIONS]);
