@@ -248,6 +248,7 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
       </div>
       <form id="authForm" onsubmit="submitAuth(event)">
         <div class="field"><label for="authUsername">Username</label><input id="authUsername" name="username" type="text" autocomplete="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]{3,24}" required><div class="field-note">3–24 letters, numbers, or underscores.</div></div>
+        <button class="logout-btn" id="randomAccountName" type="button" onclick="useRandomAccountName()">🎲 Use my random circus name</button>
         <div class="field"><label for="authPassword">Password</label><input id="authPassword" name="password" type="password" autocomplete="new-password" minlength="8" required><div class="field-note" id="passwordNote">At least 8 characters.</div></div>
         <div class="auth-error" id="authError" role="alert" aria-live="assertive"></div>
         <button class="primary-wide" id="authSubmit" type="submit">Create account</button>
@@ -349,8 +350,14 @@ function setAuthMode(mode){
   authMode=mode==='login'?'login':'register';var isRegister=authMode==='register';
   G('registerTab').classList.toggle('active',isRegister);G('loginTab').classList.toggle('active',!isRegister);
   G('registerTab').setAttribute('aria-selected',String(isRegister));G('loginTab').setAttribute('aria-selected',String(!isRegister));
+  G('randomAccountName').hidden=!isRegister;
   G('authSubmit').textContent=isRegister?'Create account':'Log in';G('authPassword').autocomplete=isRegister?'new-password':'current-password';
   G('passwordNote').textContent=isRegister?'At least 8 characters.':'Enter the password for this account.';G('authError').textContent='';
+}
+function useRandomAccountName(){
+  var randomName=(NAME||'').trim().replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,24);
+  if(randomName.length<3)randomName='Circus_Player';
+  G('authUsername').value=randomName;G('authUsername').focus();G('authError').textContent='';
 }
 async function submitAuth(e){
   if(e)e.preventDefault();if(typeof fetch!=='function')return;
