@@ -120,6 +120,7 @@ function loadQuestionsFromCache() {
       text:        q.prompt,               // cache field 'prompt' → gameplay field 'text'
       options,
       answer:      KEYS[newCorrectIdx],    // A/B/C/D
+      correctAnswer: correct,
       explanation: '',
       // Attribution/license metadata preserved (not shown mid-game)
       _source:     q.source,
@@ -132,7 +133,10 @@ function loadQuestionsFromCache() {
 function loadQuestionsFromFallback() {
   const bankPath = path.join(__dirname, 'questions', 'bank.json');
   if (!fs.existsSync(bankPath)) return [];
-  return JSON.parse(fs.readFileSync(bankPath, 'utf8'));
+  return JSON.parse(fs.readFileSync(bankPath, 'utf8')).map(q => ({
+    ...q,
+    correctAnswer: q.correctAnswer || q.options?.[q.answer] || '',
+  }));
 }
 
 function loadQuestions() {
@@ -163,6 +167,7 @@ const CFG = {
   DD_STAKE:      50,
   MAX_PLAYERS:   40,
   MAX_NAME_LEN:  24,
+  MAX_ANSWER_LEN: 160,
 };
 
 // ── Profanity filter ──────────────────────────────────────────────────────────
@@ -194,9 +199,20 @@ function validateJoin(data) {
 }
 function validateAnswer(data) {
   if (!data || typeof data !== 'object') return null;
-  if (!VALID_CHOICES.has(data.choice)) return null;
+  if (typeof data.answer !== 'string') return null;
+  const answer = data.answer.trim().slice(0, CFG.MAX_ANSWER_LEN);
+  if (!answer) return null;
   // Ignore client timeMs — server computes elapsed
-  return { choice: data.choice };
+  return { answer };
+}
+function normalizeAnswer(answer) {
+  return String(answer || '')
+    .normalize('NFKC')
+    .toLocaleLowerCase('en-US')
+    .replace(/[‘’]/g, "'")
+    .replace(/[–—]/g, '-')
+    .trim()
+    .replace(/\s+/g, ' ');
 }
 function validateReaction(data) {
   if (!data || typeof data !== 'object') return null;
@@ -307,12 +323,10 @@ function startQuestion() {
   circus.roundEarned = new Map(); // reset per question
   circus.phase = 'question';
 
-  // Strip answer from broadcast
-  const { answer: _a, explanation: _e, ...qPublic } = q;
+  // Never expose the canonical answer or old multiple-choice options mid-round.
   broadcast('question', {
     index: ++circus.qIndex,
     text:  q.text,
-    options: q.options,
     category: q.category,
     difficulty: q.difficulty,
     timeMs: CFG.QUESTION_MS,
@@ -342,25 +356,20 @@ function revealRound() {
 
   const q   = circus.currentQ;
   const now = Date.now();
-  const tally = { A: 0, B: 0, C: 0, D: 0 };
-  circus.answers.forEach(a => { tally[a.choice] = (tally[a.choice] || 0) + 1; });
+  const correctAnswer = q.correctAnswer || q.options?.[q.answer] || '';
+  const normalizedCorrect = normalizeAnswer(correctAnswer);
 
   const totalAnswered  = circus.answers.size;
   const totalEligible  = circus.eligibleProfileIds.size; // all eligible (incl. disconnected)
-  const correctCount   = tally[q.answer] || 0;
-
-  const pct = {};
-  ['A','B','C','D'].forEach(k => {
-    pct[k] = totalAnswered ? Math.round((tally[k] || 0) / totalAnswered * 100) : 0;
+  let correctCount = 0;
+  circus.answers.forEach(a => {
+    if (normalizeAnswer(a.answer) === normalizedCorrect) correctCount += 1;
   });
 
   // Trust Bonus: ALL eligible connected players answered AND all correct
   const isUnanimous = totalEligible > 1
     && totalAnswered === totalEligible
     && correctCount === totalAnswered;
-
-  const divided = !isUnanimous && totalAnswered > 1
-    && Object.values(tally).filter(v => v > 0).length > 1;
 
   // Score all eligible players (keyed by profileId — includes disconnected players with accepted answers)
   const _roundEarned = circus.roundEarned; // shared with resolveSYG for Oracle accumulation
@@ -374,7 +383,7 @@ function revealRound() {
       _roundEarned.set(profileId, { points: 0, correct: false });
       return;
     }
-    const correct = a.choice === q.answer;
+    const correct = normalizeAnswer(a.answer) === normalizedCorrect;
     player.stats.correct = (player.stats.correct || 0) + (correct ? 1 : 0);
     player.stats.wrong   = (player.stats.wrong   || 0) + (correct ? 0 : 1);
 
@@ -404,22 +413,17 @@ function revealRound() {
   });
 
   broadcast('reveal', {
-    answer: q.answer,
+    answer: correctAnswer,
     explanation: q.explanation,
-    tally, pct, isUnanimous, divided, correctCount,
+    isUnanimous, correctCount, totalAnswered, totalEligible,
     leaderboard: leaderboard(),
     presence: presencePayload(),
   });
 
   // ── Lifetime persistence is deferred to endRound() so Oracle/DD are included ──
 
-  if (divided) {
-    circus.phase = 'syg';
-    broadcast('stand_your_ground', { timeMs: CFG.SYG_MS });
-    circus.timer = setTimeout(() => resolveSYG(), CFG.SYG_MS);
-  } else {
-    circus.timer = setTimeout(() => endRound(), CFG.REVEAL_MS);
-  }
+  // Typed answers are final. There is no post-reveal answer switching.
+  circus.timer = setTimeout(() => endRound(), CFG.REVEAL_MS);
 }
 
 function resolveSYG() {
@@ -561,7 +565,6 @@ io.on('connection', socket => {
       const remaining = Math.max(0, CFG.QUESTION_MS - elapsed);
       state.currentQuestion = {
         text: circus.currentQ.text,
-        options: circus.currentQ.options,
         category: circus.currentQ.category,
         difficulty: circus.currentQ.difficulty,
         timeRemaining: remaining,
@@ -601,9 +604,9 @@ io.on('connection', socket => {
 
     // Server-side elapsed time — ignore client timeMs
     const elapsedMs = Date.now() - circus.questionSentAt;
-    circus.answers.set(profileId, { choice: data.choice, elapsedMs });
+    circus.answers.set(profileId, { answer: data.answer, elapsedMs });
 
-    socket.emit('answer_locked', { choice: data.choice });
+    socket.emit('answer_locked', { answer: data.answer });
     broadcast('presence', { players: presencePayload() });
 
     // Count for the bar display
@@ -729,7 +732,7 @@ socket.on('reaction', (rawData) => {
 });
 
 // ── Exports (for unit tests) ──────────────────────────────────────────────────
-module.exports = { clean, genName, earnedTitle, CFG, ALLOWED_EMOJIS, VALID_CHOICES };
+module.exports = { clean, genName, earnedTitle, normalizeAnswer, validateAnswer, CFG, ALLOWED_EMOJIS, VALID_CHOICES };
 
 // ── Server startup ────────────────────────────────────────────────────────────
 if (require.main === module) {

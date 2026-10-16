@@ -45,6 +45,12 @@ body{background:var(--page);color:var(--text);font-family:system-ui,-apple-syste
 .twrap svg{transform:rotate(-90deg)}
 .tnum{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.88rem;font-weight:800;color:#1a2a3a}
 .qtext{font-size:1.15rem;font-weight:700;line-height:1.5;margin-bottom:1.4rem;color:#0f1c2e}
+.answer-form{display:flex;gap:.65rem;align-items:stretch}
+.answer-input{flex:1;min-width:0;border:2px solid var(--border-soft);border-radius:10px;padding:.85rem 1rem;font:600 1rem system-ui,-apple-system,Inter,sans-serif;color:var(--text);background:#fff}
+.answer-input:focus{outline:3px solid var(--focus);outline-offset:2px;border-color:var(--coral)}
+.answer-input:disabled{background:#f4f6f8;color:#6b7a8d}
+.answer-submit{border:0;border-radius:10px;padding:.8rem 1.2rem;background:var(--coral);color:#fff;font:800 .9rem system-ui,-apple-system,Inter,sans-serif;cursor:pointer;min-width:94px}
+.answer-submit:disabled{opacity:.5;cursor:default}
 .opts{display:grid;grid-template-columns:1fr 1fr;gap:.65rem}
 .opt{background:var(--surface);border:2px solid var(--border-soft);border-radius:10px;padding:.85rem 1rem;cursor:pointer;display:flex;align-items:center;gap:.55rem;text-align:left;color:var(--text);font-family:inherit;font-size:.88rem;font-weight:600;transition:border-color .15s,background .15s;width:100%;min-height:52px}
 .opt:hover:not(:disabled){border-color:var(--coral);background:#fff5f5}
@@ -84,7 +90,7 @@ body{background:var(--page);color:var(--text);font-family:system-ui,-apple-syste
 .rpop{background:rgba(22,40,64,.95);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:.3rem .7rem;font-size:.77rem;white-space:nowrap;animation:popIn .2s ease,fadeOut 2.8s 1s forwards}
 @keyframes popIn{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:translateX(0)}}
 @keyframes fadeOut{from{opacity:1}to{opacity:0}}
-@media(max-width:560px){.side{width:120px}.opts{grid-template-columns:1fr}.qtext{font-size:1rem}.okey{display:none}}
+@media(max-width:560px){.side{width:120px}.qtext{font-size:1rem}.answer-form{flex-direction:column}.answer-submit{width:100%}}
 /* All-time leaderboard sidebar section */
 .side-sep{height:1px;background:rgba(255,255,255,.06);margin:.25rem 0}
 .side-head-alb{padding:.65rem 1rem;font-size:.65rem;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:1px;flex-shrink:0}
@@ -141,11 +147,15 @@ body{background:var(--page);color:var(--text);font-family:system-ui,-apple-syste
         </div>
       </div>
       <div class="qtext" id="qtext"></div>
-      <div class="opts" id="opts" role="group"></div>
+      <form class="answer-form" id="answerform" onsubmit="submitAnswer(event)">
+        <label for="answerinput" style="position:absolute;left:-9999px">Type your answer</label>
+        <input class="answer-input" id="answerinput" type="text" maxlength="160" autocomplete="off" autocapitalize="sentences" spellcheck="false" placeholder="Type your answer" required>
+        <button class="answer-submit" id="answerbtn" type="submit">Lock In</button>
+      </form>
       <div class="acount" id="acount" role="status" aria-live="polite"></div>
       <div class="action-row">
         <button class="btn-dd" id="ddbtn" onclick="doubleDown()">Double Down +-50pts</button>
-        <span style="font-size:.7rem;color:#8a9bb0">1-4 or A-D to answer</span>
+        <span style="font-size:.7rem;color:#8a9bb0">Spelling counts. Capitalization does not.</span>
       </div>
     </section>
     <section class="panel" id="reveal" aria-live="polite">
@@ -163,25 +173,16 @@ body{background:var(--page);color:var(--text);font-family:system-ui,-apple-syste
     </section>
   </main>
 </div>
-    <section class="panel" id="syg" style="display:none;text-align:center">
-      <div style="font-size:1.1rem;font-weight:800;margin-bottom:.5rem">The room is divided.</div>
-      <div style="color:var(--dim);margin-bottom:1rem;font-size:.9rem">Stand your ground or pick a different answer?</div>
-      <div style="display:flex;gap:.75rem;justify-content:center;margin-bottom:.75rem">
-        <button id="syg-stay" class="rbtn" style="border-color:var(--teal);color:var(--teal)" onclick="chooseStand('stay')">Stand Ground</button>
-        <button id="syg-switch-btn" class="rbtn" style="border-color:var(--amber);color:var(--amber)" onclick="showSwitchChoices()">Switch Answer</button>
-      </div>
-      <div id="syg-panel" style="display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap"></div>
-    </section>
 <div class="rfeed" id="rfeed"></div>
 <div class="toast" id="tst"></div>
 <script src="/socket.io/socket.io.js"></script>
 <script>
 var NAME=''; // Identity comes from cookie profile (circus_profile event), not URL
 var socket=io({transports:['websocket','polling']});
-var myChoice=null,timerInt=null,nextInt=null,qStart=0,curQ=null;
+var myAnswer=null,myCorrect=null,timerInt=null,nextInt=null,qStart=0,curQ=null;
 function G(id){return document.getElementById(id)}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
-function show(id){['idle','question','reveal','syg'].forEach(function(p){G(p).style.display=p===id?'block':'none'})}
+function show(id){['idle','question','reveal'].forEach(function(p){G(p).style.display=p===id?'block':'none'})}
 function toast(m,ms){var t=G('tst');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show')},ms||2200)}
 function announce(m,ms){var a=G('announce');a.textContent=m;a.classList.add('show');setTimeout(function(){a.classList.remove('show')},ms||3000)}
 socket.emit('join',{}); // identity from cookie, not client-supplied name
@@ -220,39 +221,15 @@ function updateP(pl){
 }
 socket.on('question',function(q){loadQ(q,q.timeMs);if(q.presence)updateP(q.presence);G('qctr').textContent='Q#'+((q.index||0)+1);clearInterval(nextInt)});
 function loadQ(q,timeMs){
-  curQ=q;myChoice=null;qStart=Date.now();
+  curQ=q;myAnswer=null;myCorrect=null;qStart=Date.now();
   G('qcat').textContent=q.category||'';
   G('qtext').textContent=q.text||'';
   G('acount').textContent='';
-  // Reset SYG panel for fresh question
-  var sp=G('syg-panel');if(sp)sp.innerHTML='';
-  var ssb=G('syg-switch-btn');if(ssb){ssb.style.display='';ssb.disabled=false;}
-  var ss=G('syg-stay');if(ss)ss.disabled=false;
   var db=G('ddbtn');db.disabled=false;db.classList.remove('on');db.textContent='Double Down +-50pts';
-  // Build options safely — DOM construction, no innerHTML interpolation
-  var optsEl = G('opts');
-  optsEl.innerHTML = '';
-  optsEl.onclick = null;
-  ['A','B','C','D'].forEach(function(k) {
-    var btn = document.createElement('button');
-    btn.className = 'opt';
-    btn.id = 'o' + k;  // k is always A/B/C/D — fixed set
-    btn.dataset.k = k;
-    btn.setAttribute('aria-label', k + ': ' + (q.options[k] || ''));
-    var keySpan = document.createElement('span');
-    keySpan.className = 'okey';
-    keySpan.textContent = k;
-    var txtSpan = document.createElement('span');
-    txtSpan.textContent = q.options[k] || '';
-    btn.appendChild(keySpan);
-    btn.appendChild(txtSpan);
-    optsEl.appendChild(btn);
-  });
-  optsEl.onclick = function(e) {
-    var btn = e.target.closest('.opt');
-    if (btn && btn.dataset.k) pick(btn.dataset.k);
-  };
+  var input=G('answerinput'),btn=G('answerbtn');
+  input.value='';input.disabled=false;btn.disabled=false;btn.textContent='Lock In';
   show('question');startTimer(Math.round((timeMs||22000)/1000));
+  setTimeout(function(){input.focus()},0);
 }
 function startTimer(s){
   clearInterval(timerInt);
@@ -260,47 +237,32 @@ function startTimer(s){
   function tick(){G('tnum').textContent=s;circ.style.strokeDashoffset=full*(1-s/tot);circ.style.stroke=s<=5?'var(--amber)':s<=10?'var(--coral)':'var(--teal)';if(s<=0){clearInterval(timerInt);return}s--}
   tick();timerInt=setInterval(tick,1000);
 }
-function pick(k){
-  if(myChoice)return;myChoice=k;
+function submitAnswer(e){
+  if(e)e.preventDefault();
+  if(myAnswer)return;
+  var input=G('answerinput');
+  var answer=input.value.trim();
+  if(!answer){toast('Type an answer first');return;}
+  myAnswer=answer;
   var ms=Date.now()-qStart;
-  document.querySelectorAll('.opt').forEach(function(b){b.disabled=true});
-  G('o'+k).classList.add('sel');
-  socket.emit('submit_answer',{choice:k,timeMs:ms});
+  input.disabled=true;G('answerbtn').disabled=true;G('answerbtn').textContent='Locked';
+  socket.emit('submit_answer',{answer:answer,timeMs:ms});
   clearInterval(timerInt);toast(ms<=7000?'Speed answer!':'Locked in');
 }
 function doubleDown(){var b=G('ddbtn');if(b.disabled||b.classList.contains('on'))return;socket.emit('double_down');b.classList.add('on');b.textContent='Doubled Down!';toast('All in!')}
-document.addEventListener('keydown',function(e){
-  if(G('question').style.display==='none')return;
-  var m={'1':'A','2':'B','3':'C','4':'D','a':'A','b':'B','c':'C','d':'D'};
-  var k=m[e.key.toLowerCase()];if(k)pick(k);
-});
-socket.on('answer_result',function(d){toast(d.correct?'Correct! +'+d.earned+'pts':'Wrong answer',3000)});
+socket.on('answer_result',function(d){myCorrect=!!d.correct;toast(d.correct?'Correct! +'+d.earned+'pts':'Wrong answer',3000)});
 socket.on('reveal',function(d){
   clearInterval(timerInt);
   G('rvq').textContent=curQ?curQ.text:'';
-  var ok=myChoice===d.answer;
-  G('verdict').textContent=myChoice?(ok?'Correct!':'Wrong - answer: '+d.answer):'Out of time';
+  var ok=myCorrect===true;
+  G('verdict').textContent=myAnswer?(ok?'Correct!':'Wrong - answer: '+d.answer):'Out of time - answer: '+d.answer;
   G('verdict').className='verdict '+(ok?'ok':'bad');
   G('expl').textContent=d.explanation||'';
-  ['A','B','C','D'].forEach(function(k){var b=G('o'+k);if(!b)return;b.classList.remove('sel');if(k===d.answer)b.classList.add('ok');else if(k===myChoice)b.classList.add('bad')});
   var barsEl = G('bars');
   barsEl.innerHTML = '';
-  ['A','B','C','D'].forEach(function(k){
-    var r = k === d.answer;
-    var wrap = document.createElement('div'); wrap.className = 'bwrap' + (r?' right':'');
-    var lbl = document.createElement('div'); lbl.className = 'blbl';
-    var lspan = document.createElement('span');
-    lspan.textContent = k + '. ' + ((curQ&&curQ.options&&curQ.options[k])||'');
-    var rspan = document.createElement('span');
-    rspan.textContent = (d.pct[k]||0) + '%';
-    lbl.appendChild(lspan); lbl.appendChild(rspan);
-    var bg = document.createElement('div'); bg.className = 'bbg';
-    var fill = document.createElement('div');
-    fill.className = 'bfill' + (r?' right':'');
-    fill.style.width = (d.pct[k]||0) + '%';
-    bg.appendChild(fill); wrap.appendChild(lbl); wrap.appendChild(bg);
-    barsEl.appendChild(wrap);
-  });
+  var summary=document.createElement('div');summary.className='bwrap right';
+  summary.textContent=(d.correctCount||0)+' of '+(d.totalAnswered||0)+' players answered correctly';
+  barsEl.appendChild(summary);
   if(d.isUnanimous)announce('Unanimous! The whole circus got it right!',3500);
   if(d.leaderboard)updateP(d.leaderboard);
   var n=5;G('nextn').textContent=n;clearInterval(nextInt);
@@ -310,50 +272,6 @@ socket.on('reveal',function(d){
 socket.on('answer_count',function(d){
   if(d&&typeof d.count==='number') G('acount').textContent=d.count+' / '+d.total+' answered';
 });
-socket.on('stand_your_ground',function(d){
-  show('syg');
-});
-socket.on('syg_locked',function(){
-  disableSYG();
-});
-function broadcast_syg_panel(){
-  // Only show SYG panel if in reveal state; otherwise ignore
-  if(G('reveal')&&G('reveal').style.display!=='none'){
-    var panel=G('syg-panel');
-    if(panel)panel.style.display='block';
-  }
-}
-function showSwitchChoices(){
-  // Show explicit per-choice buttons — do NOT emit yet (TC blocker #10)
-  var panel=G('syg-panel');
-  panel.innerHTML='';
-  ['A','B','C','D'].filter(function(k){return k!==myChoice}).forEach(function(k){
-    var btn=document.createElement('button');
-    btn.className='rbtn';
-    btn.dataset.choice=k;
-    btn.style.cssText='border-color:var(--amber);color:var(--amber)';
-    btn.textContent=k+(curQ&&curQ.options&&curQ.options[k]?': '+curQ.options[k]:'');
-    btn.onclick=function(){
-      myChoice=k;
-      socket.emit('stand_ground',{choice:k});
-      disableSYG();
-    };
-    panel.appendChild(btn);
-  });
-  G('syg-switch-btn').style.display='none';
-}
-function disableSYG(){
-  ['syg-stay','syg-switch-btn'].forEach(function(id){var b=G(id);if(b)b.disabled=true;});
-  [...G('syg-panel').querySelectorAll('button')].forEach(function(b){b.disabled=true;});
-}
-function chooseStand(decision){
-  if(decision==='stay'){
-    socket.emit('stand_ground',{decision:'stay'});
-    disableSYG();
-  } else {
-    showSwitchChoices();
-  }
-}
 // ── Persistent profile + all-time leaderboard ──────────────────────────────
 var myLifetimeScore = 0;
 function updateAllTimeBoard(board) {

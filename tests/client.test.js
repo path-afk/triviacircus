@@ -32,28 +32,23 @@ test('player pseudonyms cannot inject DOM attributes or elements', () => {
   dom.window.close();
 });
 
-test('switching in Stand Your Ground requires an explicit alternate answer', () => {
+test('typed answer is locked and submitted without multiple-choice controls', () => {
   const dom = new JSDOM(gameHtml, {
     runScripts: 'outside-only',
     url: 'http://127.0.0.1/game.html?room=CIRCUS-1234&name=Host'
   });
   const emitted = [];
-  const scheduled = [];
-  dom.window.setTimeout = (fn, ms) => { scheduled.push(ms); };
+  dom.window.setTimeout = () => 0;
   dom.window.io = () => ({ emit(event, payload) { emitted.push({ event, payload }); }, on() {} });
   dom.window.eval(inlineScripts.join('\n'));
-  dom.window.myChoice = 'B';
+  dom.window.loadQ({ category: 'Geography', text: 'Capital of France?' }, 22000);
+  dom.window.document.getElementById('answerinput').value = 'Paris';
+  dom.window.submitAnswer({ preventDefault() {} });
 
-  dom.window.chooseStand('switch');
-
-  assert.equal(emitted.some(item => item.event === 'stand_ground'), false);
-  const buttons = [...dom.window.document.querySelectorAll('#syg-panel button')];
-  const choices = buttons.map(button => button.dataset.choice);
-  assert.deepEqual(choices, ['A', 'C', 'D']);
-  buttons[0].click();
-  assert.equal(emitted.find(item => item.event === 'stand_ground').payload.choice, 'A');
-  assert.equal(dom.window.myChoice, 'A');
-  assert.deepEqual(scheduled, []);
+  const submitted = emitted.find(item => item.event === 'submit_answer');
+  assert.equal(submitted.payload.answer, 'Paris');
+  assert.equal(dom.window.document.querySelectorAll('.opt').length, 0);
+  assert.equal(dom.window.document.getElementById('answerinput').disabled, true);
   dom.window.close();
 });
 
@@ -70,7 +65,6 @@ test('question event makes the question panel visibly render', () => {
     index: 0,
     category: 'Science',
     text: 'Visible question?',
-    options: { A: 'Yes', B: 'No', C: 'Maybe', D: 'Never' },
     timerOff: true
   });
 
@@ -78,7 +72,7 @@ test('question event makes the question panel visibly render', () => {
   dom.window.close();
 });
 
-test('final reveal does not reopen Stand Your Ground', () => {
+test('reveal shows canonical typed answer and room result', () => {
   const dom = new JSDOM(gameHtml, {
     runScripts: 'outside-only',
     url: 'http://127.0.0.1/game.html?room=CIRCUS-1234&name=Host'
@@ -86,12 +80,11 @@ test('final reveal does not reopen Stand Your Ground', () => {
   const handlers = {};
   dom.window.io = () => ({ emit() {}, on(event, fn) { handlers[event] = fn; } });
   dom.window.eval(inlineScripts.join('\n'));
-  const options = { A: 'A', B: 'B', C: 'C', D: 'D' };
-  handlers.question({ index: 0, total: 1, category: 'Science', text: 'Q', options, timerOff: true });
-  handlers.stand_your_ground({ tally: { A: 1, B: 1, C: 0, D: 0 } });
-  handlers.reveal({ answer: 'A', pct: { A: 50, B: 50, C: 0, D: 0 }, divided: true, correctCount: 1 });
+  handlers.question({ index: 0, total: 1, category: 'Science', text: 'Q', timerOff: true });
+  handlers.reveal({ answer: 'Paris', correctCount: 1, totalAnswered: 2 });
 
   assert.notEqual(dom.window.document.getElementById('reveal').style.display, 'none');
-  assert.equal(dom.window.document.getElementById('syg').style.display, 'none');
+  assert.match(dom.window.document.getElementById('verdict').textContent, /Paris/);
+  assert.match(dom.window.document.getElementById('bars').textContent, /1 of 2/);
   dom.window.close();
 });

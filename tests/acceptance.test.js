@@ -190,25 +190,24 @@ async function leaderboard(port, limit) {
   return body.entries;
 }
 
-function correctChoice(question) {
+function correctAnswer(question) {
   const cached = CACHE.questions.find(item => item.prompt === question.text);
   if (cached) {
-    const correctText = cached.choices[cached.correctIndex];
-    const entry = Object.entries(question.options).find(([, text]) => text === correctText);
-    assert.ok(entry, 'public question options must contain the source correct answer');
-    return entry[0];
+    return cached.choices[cached.correctIndex];
   }
   const fallback = FALLBACK.find(item => item.text === question.text);
   assert.ok(fallback, `question not found in published banks: ${question.text}`);
-  return fallback.answer;
+  return fallback.options[fallback.answer];
 }
 
 async function scoreOneRound(socket) {
   const question = await waitFor(socket, 'question', 7000);
+  assert.equal(question.options, undefined, 'typed-answer rounds must not expose multiple-choice options');
+  assert.equal(question.answer, undefined, 'question event must not expose the answer');
   const resultPromise = waitFor(socket, 'answer_result', 7000);
   // B6: also gate on round_end so SQLite is committed before callers read it
   const roundEndPromise = new Promise(res => { socket.once('round_end', res); setTimeout(res, 9000); });
-  socket.emit('submit_answer', { choice: correctChoice(question) });
+  socket.emit('submit_answer', { answer: correctAnswer(question) });
   const result = await resultPromise;
   assert.equal(result.correct, true, 'published correct answer must be accepted');
   assert.ok(result.earned > 0, 'authoritative gameplay must award positive points');
@@ -443,14 +442,14 @@ test('concurrent duplicate submissions for one guest produce one atomic lifetime
         'all concurrent tabs must receive the same public profile state');
       const questions = sockets.map(socket => waitFor(socket, 'question', 7000));
       const received = await Promise.all(questions);
-      const choice = correctChoice(received[0]);
+      const answer = correctAnswer(received[0]);
       assert.ok(received.every(question => question.text === received[0].text),
         'concurrent tabs must receive the same round');
 
       const results = [];
       for (const socket of sockets) socket.on('answer_result', result => results.push(result));
       await Promise.all(sockets.map(socket => new Promise(resolve => {
-        socket.emit('submit_answer', { choice });
+        socket.emit('submit_answer', { answer });
         setImmediate(resolve);
       })));
       let _poll;

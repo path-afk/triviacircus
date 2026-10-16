@@ -4,7 +4,7 @@
  */
 'use strict';
 const assert = require('assert');
-const { clean, genName, earnedTitle, CFG, ALLOWED_EMOJIS, VALID_CHOICES } = require('../server');
+const { clean, genName, earnedTitle, normalizeAnswer, validateAnswer, CFG, ALLOWED_EMOJIS, VALID_CHOICES } = require('../server');
 
 let pass = 0, fail = 0;
 function test(name, fn) {
@@ -61,6 +61,12 @@ test('Exactly 4 choices A-D',             () => assert.strictEqual(VALID_CHOICES
 test('A/B/C/D all valid',                 () => ['A','B','C','D'].forEach(k => assert.ok(VALID_CHOICES.has(k))));
 test('E not valid',                       () => assert.ok(!VALID_CHOICES.has('E')));
 test('lowercase a not valid',             () => assert.ok(!VALID_CHOICES.has('a')));
+
+console.log('\n[Typed answers]');
+test('normalization ignores case and extra spaces', () => assert.strictEqual(normalizeAnswer('  THE   Beatles '), 'the beatles'));
+test('normalization preserves misspellings', () => assert.notStrictEqual(normalizeAnswer('Beatels'), normalizeAnswer('Beatles')));
+test('typed answer payload is accepted', () => assert.deepStrictEqual(validateAnswer({answer:' Paris '}), {answer:'Paris'}));
+test('legacy choice payload is rejected', () => assert.strictEqual(validateAnswer({choice:'A'}), null));
 
 console.log('\n[Question bank]');
 const bank = require('../questions/bank.json');
