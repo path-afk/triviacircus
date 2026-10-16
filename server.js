@@ -26,6 +26,12 @@ const {
 const names         = require('./lib/names');
 const { categoryBalancedShuffle } = require('./lib/question-order');
 const { PLAYER_STATUSES, validatePlayerStatus } = require('./lib/player-status');
+const {
+  HUMAN_COOKIE, HUMAN_MAX_AGE_MS, getHumanGateConfig, createHumanToken,
+  verifyHumanToken, cookieValueFromHeader, verifyTurnstile,
+} = require('./lib/human-gate');
+
+const HUMAN_GATE = getHumanGateConfig();
 
 const app        = express();
 const httpServer = http.createServer(app);
@@ -91,6 +97,29 @@ function requireSameOrigin(req, res, next) {
   next();
 }
 
+function isHumanRequest(req) {
+  return !HUMAN_GATE.enabled || verifyHumanToken(req.cookies[HUMAN_COOKIE], HUMAN_GATE.signingSecret);
+}
+
+function requireHuman(req, res, next) {
+  if (isHumanRequest(req)) return next();
+  return res.status(403).json({ error: 'Human verification required.', code: 'HUMAN_VERIFICATION_REQUIRED' });
+}
+
+const _humanAttempts = new Map();
+function humanVerifyRateLimiter(req, res, next) {
+  const key = req.get('cf-connecting-ip') || req.ip || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const recent = (_humanAttempts.get(key) || []).filter(ts => now - ts < 60 * 1000);
+  if (recent.length >= 10) return res.status(429).json({ error: 'Please wait before trying again.' });
+  recent.push(now);
+  _humanAttempts.set(key, recent);
+  if (_humanAttempts.size > 5000) {
+    for (const [candidate, list] of _humanAttempts) if (!list.some(ts => now - ts < 60 * 1000)) _humanAttempts.delete(candidate);
+  }
+  next();
+}
+
 const _authAttempts = new Map();
 function authRateLimited(req, username) {
   const now = Date.now();
@@ -107,6 +136,32 @@ function authRateLimited(req, username) {
 function publicIdentity(db, profile, registered) {
   return publicProfile(profile, getProfileRank(db, profile.id), undefined, registered);
 }
+
+app.get('/api/human/config', (req, res) => {
+  res.json({
+    enabled: HUMAN_GATE.enabled,
+    siteKey: HUMAN_GATE.enabled ? HUMAN_GATE.siteKey : '',
+    verified: isHumanRequest(req),
+  });
+});
+
+app.post('/api/human/verify', requireSameOrigin, humanVerifyRateLimiter, async (req, res) => {
+  if (!HUMAN_GATE.enabled) return res.json({ ok: true });
+  const verified = await verifyTurnstile({
+    response: req.body && req.body.token,
+    remoteip: req.get('cf-connecting-ip') || req.ip,
+    config: HUMAN_GATE,
+  });
+  if (!verified) return res.status(403).json({ error: 'Verification failed. Please try again.' });
+  res.cookie(HUMAN_COOKIE, createHumanToken(HUMAN_GATE.signingSecret), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: HUMAN_MAX_AGE_MS,
+  });
+  res.json({ ok: true });
+});
 
 // GET /api/profile — return the current persistent guest or registered profile
 app.get('/api/profile', (req, res) => {
@@ -127,7 +182,7 @@ app.post('/api/profile/rename', requireSameOrigin, renameRateLimiter, (req, res)
   } catch (e) { res.status(500).json({ error: 'Rename failed' }); }
 });
 
-app.post('/api/auth/register', requireSameOrigin, async (req, res) => {
+app.post('/api/auth/register', requireSameOrigin, requireHuman, async (req, res) => {
   const username = validateUsername(req.body && req.body.username);
   const password = validatePassword(req.body && req.body.password);
   if (!username || !password) return res.status(400).json({ error: 'Use 3–24 letters, numbers, or underscores and a password of at least 8 characters.' });
@@ -155,7 +210,7 @@ app.post('/api/auth/register', requireSameOrigin, async (req, res) => {
 
 const _fakeSalt = Buffer.alloc(16, 7);
 const _fakeHash = Buffer.alloc(64, 11);
-app.post('/api/auth/login', requireSameOrigin, async (req, res) => {
+app.post('/api/auth/login', requireSameOrigin, requireHuman, async (req, res) => {
   const username = validateUsername(req.body && req.body.username);
   const password = typeof (req.body && req.body.password) === 'string' ? req.body.password : '';
   if (authRateLimited(req, username || 'invalid')) return res.status(429).json({ error: 'Too many attempts. Please try again later.' });
@@ -654,6 +709,14 @@ function endRound() {
 io.use((socket, next) => {
   try {
     const header = socket.handshake.headers.cookie || '';
+    if (HUMAN_GATE.enabled) {
+      const humanToken = cookieValueFromHeader(header, HUMAN_COOKIE);
+      if (!verifyHumanToken(humanToken, HUMAN_GATE.signingSecret)) {
+        const error = new Error('Human verification required');
+        error.data = { code: 'HUMAN_VERIFICATION_REQUIRED' };
+        return next(error);
+      }
+    }
     const db = getDb();
     const sessionToken = sessionTokenFromCookieHeader(header);
     const sessionProfile = resolveSession(db, sessionToken);

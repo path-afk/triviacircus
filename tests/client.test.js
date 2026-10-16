@@ -16,6 +16,19 @@ test('game page inline JavaScript parses', () => {
   for (const source of inlineScripts) new vm.Script(source);
 });
 
+test('header uses circus branding without announcing question numbers', () => {
+  const dom = new JSDOM(gameHtml);
+  assert.equal(dom.window.document.querySelector('.brand-mark').textContent.trim(), '🎪');
+  assert.equal(dom.window.document.querySelector('#qctr'), null);
+  assert.match(gameHtml, /autoConnect:false/);
+  assert.equal(dom.window.document.querySelector('#leaderboardBtn').getAttribute('aria-label'), 'Open all-time leaderboard');
+  assert.equal(dom.window.document.querySelector('#accountBtn').getAttribute('aria-label'), 'Open account');
+  assert.equal(dom.window.document.querySelector('#answerinput').getAttribute('enterkeyhint'), 'send');
+  assert.equal(dom.window.document.querySelector('#answerinput').getAttribute('aria-describedby'), 'answer-hint');
+  assert.equal(dom.window.document.querySelector('.human-card').getAttribute('tabindex'), '-1');
+  dom.window.close();
+});
+
 test('player pseudonyms cannot inject DOM attributes or elements', () => {
   const dom = new JSDOM(gameHtml, {
     runScripts: 'outside-only',

@@ -52,7 +52,6 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 .account-btn:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.25);transform:translateY(-1px)}
 .account-avatar{width:22px;height:22px;display:grid;place-items:center;border-radius:8px;background:rgba(255,201,40,.18);color:var(--gold);font-size:.7rem;font-weight:900;flex:0 0 auto}
 .account-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.qctr{font-size:.66rem;color:var(--amber);font-weight:800;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
 .leaderboard-btn{display:flex;align-items:center;gap:.48rem;min-height:40px;padding:.56rem .82rem;border:1px solid rgba(255,201,40,.5);border-radius:12px;background:rgba(255,201,40,.12);color:#ffe477;cursor:pointer;font-size:.75rem;font-weight:900;transition:background .18s,transform .18s}
 .leaderboard-btn:hover{background:rgba(255,201,40,.22);transform:translateY(-1px)}
 .app-shell{height:calc(100dvh - 82px);display:grid;grid-template-columns:360px minmax(0,1fr);min-height:0}
@@ -134,9 +133,11 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 .auth-error{min-height:1.15rem;color:#ff9fa4;font-size:.72rem;font-weight:700;margin:.2rem 0 .65rem}.primary-wide,.logout-btn{width:100%;border:0;border-radius:13px;padding:.78rem 1rem;cursor:pointer;font-weight:900;font-size:.78rem}.primary-wide{background:linear-gradient(135deg,var(--coral),#ff7d63);color:#fff}.primary-wide:disabled{opacity:.55;cursor:wait}.logout-btn{background:rgba(255,93,101,.08);border:1px solid rgba(255,93,101,.25);color:#ff9ca1}
 .account-card{border:1px solid var(--line);background:rgba(255,255,255,.035);border-radius:16px;padding:1rem;margin:1rem 0}.account-card-name{font:800 1.1rem/1.2 "Manrope",sans-serif}.account-card-meta{color:var(--muted);font-size:.73rem;margin-top:.35rem}
 .account-secure{display:flex;gap:.55rem;align-items:flex-start;color:var(--muted);font-size:.7rem;line-height:1.45;margin-top:.85rem}.account-secure span:first-child{color:var(--teal)}
+.human-gate{z-index:900;text-align:center}.human-card{width:min(430px,calc(100vw - 2rem));text-align:center}.human-mark{width:70px;height:70px;margin:0 auto 1rem;border-radius:23px;display:grid;place-items:center;background:linear-gradient(145deg,#ffe56b,var(--gold));color:var(--navy);font-size:2rem;box-shadow:0 16px 38px rgba(255,201,40,.24)}.human-card h2{margin-right:0}.human-card .modal-intro{max-width:340px;margin-left:auto;margin-right:auto}.turnstile-box{min-height:70px;display:grid;place-items:center;margin:1.1rem auto .7rem}.human-error{min-height:1.2rem;color:#ffb0b5;font-size:.72rem;font-weight:800}
 @media(max-width:980px){.topbar{grid-template-columns:auto 1fr auto}.brand-copy,.live-pill{display:none}.top-actions{gap:.4rem}.account-btn{max-width:46px;padding:.55rem}.account-label{display:none}.leaderboard-btn span:last-child{display:none}.leaderboard-btn{width:42px;justify-content:center;padding:.55rem}.app-shell{grid-template-columns:300px minmax(0,1fr)}}
-@media(max-width:680px){body{overflow:auto}.topbar{height:68px;position:sticky;top:0;grid-template-columns:auto minmax(0,1fr) auto;padding:0 .8rem}.brand-mark{width:38px;height:38px}.identity-name{font-size:1rem;max-width:42vw}.identity-stats{font-size:.64rem}.qctr{display:none}.app-shell{height:auto;min-height:calc(100dvh - 68px);display:flex;flex-direction:column}.stage{order:1;min-height:calc(100dvh - 68px);padding:1rem;align-items:center}.side{order:2;width:100%;border-right:0;border-top:1px solid rgba(255,201,40,.28);overflow:visible}.side-section.players{flex:none}.plist{max-height:360px}.game-card{border-radius:20px}.answer-form{grid-template-columns:1fr}.answer-submit{min-height:48px}.action-row{align-items:flex-start}.answer-hint{max-width:155px}.rfeed{top:78px}.modal-card{border-radius:20px}.leaderboard-card{width:100vw;height:100dvh;border-radius:0}}
-@media(max-width:400px){.identity-stats span:nth-child(2),.identity-stats .accent{display:none}.qmeta{align-items:flex-start}.qdiff{display:none}.action-row{display:block}.answer-hint{text-align:left;max-width:none;margin-top:.65rem}.reactions{gap:.35rem}.rbtn{font-size:.66rem}}
+@media(max-width:680px){body{overflow-y:auto;overflow-x:hidden}.topbar{height:calc(72px + env(safe-area-inset-top));position:sticky;top:0;grid-template-columns:44px minmax(0,1fr) auto;gap:.45rem;padding-top:env(safe-area-inset-top);padding-left:max(.65rem,env(safe-area-inset-left));padding-right:max(.65rem,env(safe-area-inset-right))}.brand{gap:0}.brand-mark{width:40px;height:40px;border-radius:13px}.identity-name{font-size:1rem;max-width:none}.identity-stats{font-size:.62rem;gap:.3rem;white-space:nowrap}.top-actions{gap:.3rem}.account-btn,.leaderboard-btn{width:44px;min-width:44px;min-height:44px;padding:0;justify-content:center}.app-shell{width:100%;height:auto;min-height:calc(100svh - 72px - env(safe-area-inset-top));min-height:calc(100dvh - 72px - env(safe-area-inset-top));display:flex;flex-direction:column;overflow-x:hidden}.stage{order:1;width:100%;min-height:calc(100svh - 72px - env(safe-area-inset-top));min-height:calc(100dvh - 72px - env(safe-area-inset-top));padding:1rem .8rem;align-items:center;overflow:visible}.stage:before{width:min(92vw,560px)}.stage-inner{width:100%;max-width:100%}#idle{width:100%;padding:2.25rem .25rem}#idle h1{max-width:100%;font-size:clamp(1.8rem,8.5vw,2.35rem);overflow-wrap:anywhere}#idle p{font-size:.88rem;padding:0 .25rem}.side{order:2;width:100%;border-right:0;border-top:1px solid rgba(255,201,40,.28);overflow:visible}.side-section.players{flex:none}.plist{max-height:360px}.game-card{width:100%;border-radius:20px;padding:1.25rem 1rem}.qmeta{margin-bottom:1rem;flex-wrap:wrap}.qtext{font-size:clamp(1.25rem,6.3vw,1.7rem);margin-bottom:1.25rem}.answer-form{grid-template-columns:1fr}.answer-input{min-height:50px;font-size:16px}.answer-submit{min-height:50px}.action-row{align-items:flex-start}.answer-hint{max-width:155px}.rfeed{top:calc(82px + env(safe-area-inset-top));left:1rem;right:1rem}.rpop{max-width:100%;white-space:normal;text-align:right}.modal{padding:max(1rem,env(safe-area-inset-top)) max(1rem,env(safe-area-inset-right)) max(1rem,env(safe-area-inset-bottom)) max(1rem,env(safe-area-inset-left))}.modal-card{border-radius:20px}.modal-close,.status-picker,.btn-dd,.rbtn,.primary-wide,.logout-btn{min-height:44px}.modal-close{width:44px;height:44px}.human-card{padding:1.15rem .8rem}.turnstile-box{width:100%;max-width:100%;overflow:hidden}.leaderboard-card{width:100vw;height:100dvh;border-radius:0;padding-top:max(1.6rem,env(safe-area-inset-top));padding-right:max(1.6rem,env(safe-area-inset-right));padding-bottom:max(1.6rem,env(safe-area-inset-bottom));padding-left:max(1.6rem,env(safe-area-inset-left))}}
+@media(max-width:680px) and (max-height:600px){.stage{align-items:flex-start}.answer-form{grid-template-columns:minmax(0,1fr) auto}.answer-submit{min-width:96px;min-height:53px;padding-inline:.8rem}}
+@media(max-width:400px){.identity-stats span:nth-child(2),.identity-stats .accent{display:none}.qmeta{align-items:flex-start}.qdiff{display:none}.action-row{display:flex;flex-direction:column;align-items:flex-start;gap:.55rem}.answer-hint{display:block;text-align:left;max-width:none;margin-top:0}.reactions{gap:.35rem}.rbtn{font-size:.66rem}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -145,7 +146,7 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 <div class="ambient" aria-hidden="true"></div>
 <header class="topbar">
   <div class="brand" aria-label="Trivia Circus">
-    <div class="brand-mark" aria-hidden="true">✦</div>
+    <div class="brand-mark" aria-hidden="true">🎪</div>
     <div class="brand-copy"><div class="brand-title">Trivia Circus</div><div class="brand-sub">Live arena</div></div>
   </div>
   <div class="identity">
@@ -155,9 +156,9 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
     </div>
   </div>
   <div class="top-actions">
-    <div class="live-pill"><span class="live-dot" aria-hidden="true"></span><span id="qctr">Live</span></div>
-    <button class="leaderboard-btn" id="leaderboardBtn" type="button" aria-haspopup="dialog" aria-controls="leaderboardModal" aria-expanded="false" onclick="toggleLeaderboard()"><span aria-hidden="true">◆</span><span>Leaderboard</span></button>
-    <button class="account-btn" id="accountBtn" type="button" aria-haspopup="dialog" aria-controls="accountModal" aria-expanded="false" onclick="openAccount()">
+    <div class="live-pill" aria-label="Live game"><span class="live-dot" aria-hidden="true"></span><span>Live</span></div>
+    <button class="leaderboard-btn" id="leaderboardBtn" type="button" aria-label="Open all-time leaderboard" aria-haspopup="dialog" aria-controls="leaderboardModal" aria-expanded="false" onclick="toggleLeaderboard()"><span aria-hidden="true">◆</span><span>Leaderboard</span></button>
+    <button class="account-btn" id="accountBtn" type="button" aria-label="Open account" aria-haspopup="dialog" aria-controls="accountModal" aria-expanded="false" onclick="openAccount()">
       <span class="account-avatar" id="accountAvatar" aria-hidden="true">◉</span><span class="account-label" id="accountLabel">Account</span>
     </button>
   </div>
@@ -204,13 +205,13 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
         <div class="answer-label"><span>Your answer</span><span class="privacy-note">Private until reveal</span></div>
         <form class="answer-form" id="answerform" onsubmit="submitAnswer(event)">
           <label for="answerinput" hidden>Type your answer</label>
-          <input class="answer-input" id="answerinput" type="text" maxlength="160" autocomplete="off" autocapitalize="sentences" spellcheck="false" placeholder="Type what you know…" required>
+          <input class="answer-input" id="answerinput" type="text" maxlength="160" autocomplete="off" autocapitalize="sentences" enterkeyhint="send" aria-describedby="answer-hint" spellcheck="false" placeholder="Type what you know…" required>
           <button class="answer-submit" id="answerbtn" type="submit">Lock answer</button>
         </form>
         <div class="acount" id="acount" role="status" aria-live="polite"></div>
         <div class="action-row">
           <button class="btn-dd" id="ddbtn" type="button" onclick="doubleDown()">Double down · ±50</button>
-          <span class="answer-hint">Spelling counts. Capitalization does not.</span>
+          <span class="answer-hint" id="answer-hint">Spelling counts. Capitalization does not.</span>
         </div>
       </section>
       <section class="panel game-card" id="reveal" aria-live="polite" aria-labelledby="verdict">
@@ -269,10 +270,19 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
     <div class="alltime-list" id="alb" role="list" aria-label="All-time leaderboard"></div>
   </section>
 </div>
+<div class="modal human-gate" id="humanGate" hidden aria-hidden="true">
+  <section class="modal-card human-card" role="dialog" aria-modal="true" aria-labelledby="humanTitle" aria-describedby="humanIntro" tabindex="-1">
+    <div class="human-mark" aria-hidden="true">🎪</div>
+    <h2 id="humanTitle">One quick ticket check</h2>
+    <p class="modal-intro" id="humanIntro">We keep the ring for real players. This private check usually finishes by itself.</p>
+    <div class="turnstile-box" id="turnstileWidget" aria-live="polite"></div>
+    <div class="human-error" id="humanError" role="alert" aria-live="assertive"></div>
+  </section>
+</div>
 <script src="/socket.io/socket.io.js"></script>
 <script>
 var NAME='';
-var socket=io({transports:['websocket','polling']});
+var socket=io({transports:['websocket','polling'],autoConnect:false});
 var myAnswer=null,myCorrect=null,timerInt=null,nextInt=null,curQ=null,currentRoundId=null;
 var answerPending=false,answerResult=null,myLifetimeScore=0,accountProfile=null,authMode='register';
 var lastModalFocus=null;
@@ -362,7 +372,41 @@ document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){active===G('accountModal')?closeAccount():closeLeaderboard();return}
   if(e.key==='Tab'){var items=Array.prototype.slice.call(active.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled])')).filter(function(item){return !item.closest('[hidden]')});if(!items.length)return;var first=items[0],last=items[items.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}
 });
-socket.emit('join',{});
+function connectToCircus(){
+  fetchProfile();
+  if(socket.connected)return;
+  if(typeof socket.connect==='function')socket.connect();
+  else socket.emit('join',{});
+}
+function showHumanGate(){var gate=G('humanGate');gate.hidden=false;gate.setAttribute('aria-hidden','false');document.querySelector('.topbar').inert=true;document.querySelector('.app-shell').inert=true;document.body.classList.add('modal-open');setTimeout(function(){gate.querySelector('.human-card').focus()},0)}
+function hideHumanGate(){var gate=G('humanGate');gate.hidden=true;gate.setAttribute('aria-hidden','true');document.querySelector('.topbar').inert=false;document.querySelector('.app-shell').inert=false;document.body.classList.remove('modal-open')}
+function loadTurnstileScript(){
+  return new Promise(function(resolve,reject){
+    if(window.turnstile)return resolve();
+    var existing=document.querySelector('script[data-turnstile]');if(existing){existing.addEventListener('load',resolve,{once:true});existing.addEventListener('error',reject,{once:true});return}
+    var script=document.createElement('script');script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';script.async=true;script.defer=true;script.dataset.turnstile='1';script.onload=resolve;script.onerror=reject;document.head.appendChild(script);
+  });
+}
+async function verifyHumanChallenge(token,widgetId){
+  G('humanError').textContent='Checking your ticket…';
+  try{
+    var res=await fetch('/api/human/verify',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({token:token})});
+    var data=null;try{data=await res.json()}catch(_e){}
+    if(!res.ok||!data||!data.ok)throw new Error(data&&data.error?data.error:'Verification failed.');
+    G('humanError').textContent='';hideHumanGate();connectToCircus();
+  }catch(err){G('humanError').textContent=err&&err.message?err.message:'Verification failed. Please try again.';if(window.turnstile&&widgetId!==undefined)window.turnstile.reset(widgetId)}
+}
+async function startHumanCheck(){
+  if(typeof fetch!=='function'){connectToCircus();return}
+  try{
+    var res=await fetch('/api/human/config',{headers:{Accept:'application/json'}});if(!res.ok)throw new Error('Ticket check unavailable.');var config=await res.json();
+    if(!config.enabled||config.verified){connectToCircus();return}
+    showHumanGate();await loadTurnstileScript();var widgetId;
+    widgetId=window.turnstile.render('#turnstileWidget',{sitekey:config.siteKey,action:'trivia-join',theme:'light',size:'flexible',callback:function(token){verifyHumanChallenge(token,widgetId)},'error-callback':function(){G('humanError').textContent='The ticket check could not load. Please retry.'},'expired-callback':function(){G('humanError').textContent='The check expired. Please try again.'}});
+  }catch(err){showHumanGate();G('humanError').textContent=err&&err.message?err.message:'Ticket check unavailable. Please reload.'}
+}
+socket.on('connect',function(){socket.emit('join',{})});
+socket.on('connect_error',function(err){if(err&&err.data&&err.data.code==='HUMAN_VERIFICATION_REQUIRED'){showHumanGate();G('humanError').textContent='Please complete the ticket check to enter.'}});
 socket.on('joined',function(d){
   NAME=d.name||NAME;updateP(d.presence||[]);if(d.profile)applyProfile(d.profile);else if(NAME)G('myname').textContent=NAME;
   if(d.phase==='question'&&d.currentQuestion){loadQ(d.currentQuestion,d.currentQuestion.timeRemaining)}else show('idle');
@@ -388,13 +432,13 @@ function updateP(pl){
   });
   var me=pl.find(function(p){return p.name===NAME});if(me)G('myscore').textContent=(Number(me.score)||0)+' pts this game';
 }
-socket.on('question',function(q){loadQ(q,q.timeMs);if(q.presence)updateP(q.presence);G('qctr').textContent='Question '+((q.index||0)+1);clearInterval(nextInt)});
+socket.on('question',function(q){loadQ(q,q.timeMs);if(q.presence)updateP(q.presence);clearInterval(nextInt)});
 function loadQ(q,timeMs){
   curQ=q||{};currentRoundId=typeof curQ.roundId==='string'?curQ.roundId:'';myAnswer=null;myCorrect=null;answerResult=null;answerPending=false;
   G('qcat').textContent=curQ.category||'Open category';G('qdiff').textContent=difficultyLabel(curQ.difficulty);G('qtext').textContent=curQ.text||'';G('acount').textContent='';
   var db=G('ddbtn');db.disabled=false;db.classList.remove('on');db.textContent='Double down · ±50';
   var input=G('answerinput'),btn=G('answerbtn');input.value='';input.disabled=false;input.placeholder='Type what you know…';btn.disabled=false;btn.textContent='Lock answer';
-  show('question');if(curQ.timerOff){clearInterval(timerInt);G('tnum').textContent='—'}else startTimer(timeMs);setTimeout(function(){input.focus()},0);
+  show('question');if(curQ.timerOff){clearInterval(timerInt);G('tnum').textContent='—'}else startTimer(timeMs);if(!window.matchMedia||window.matchMedia('(pointer:fine)').matches)setTimeout(function(){input.focus()},0);
 }
 function startTimer(ms){
   clearInterval(timerInt);var circ=G('tcirc'),full=138.23,requested=Number(ms),total=Number.isFinite(requested)&&requested>0?requested:30000,remaining=total,started=Date.now();
@@ -454,7 +498,7 @@ function react(e){socket.emit('reaction',{emoji:e});toast(e)}
 socket.on('reaction',function(d){
   if(!d||typeof d.name!=='string'||typeof d.emoji!=='string')return;var feed=G('rfeed'),el=document.createElement('div');el.className='rpop';el.textContent=d.name+': '+d.emoji;feed.appendChild(el);setTimeout(function(){if(el&&el.parentNode)el.remove()},3800);
 });
-show('idle');updateP([]);updateAllTimeBoard([]);setAuthMode('register');renderAccountState();fetchProfile();
+show('idle');updateP([]);updateAllTimeBoard([]);setAuthMode('register');renderAccountState();startHumanCheck();
 </script>
 </body>
 </html>
