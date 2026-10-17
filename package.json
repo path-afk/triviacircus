@@ -6,8 +6,8 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --test --test-concurrency=1 tests/*.test.js",
-    "test:importer": "node --test importer/test/importer.test.js",
-    "test:all": "node --test --test-concurrency=1 tests/*.test.js && node --test importer/test/importer.test.js",
+    "test:importer": "node --test importer/test/*.test.js",
+    "test:all": "node --test --test-concurrency=1 tests/*.test.js && node --test importer/test/*.test.js",
     "import": "node importer/src/cli.js",
     "test:acceptance": "node --test tests/acceptance.test.js"
   },

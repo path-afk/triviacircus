@@ -25,6 +25,7 @@ const {
 } = require('./lib/db');
 const names         = require('./lib/names');
 const { categoryBalancedShuffle } = require('./lib/question-order');
+const { normalizeAnswer, answerMatchesQuestion, revealAnswer } = require('./lib/question-answer');
 const { PLAYER_STATUSES, validatePlayerStatus } = require('./lib/player-status');
 const { createPrivateRoomManager } = require('./lib/private-rooms');
 const {
@@ -306,42 +307,58 @@ app.get('/api/leaderboard', (req, res) => {
 
 
 // ── Question loader (production cache: OpenTriviaQA CC BY-SA 4.0) ──────────────
-// Reads from importer/cache/open-trivia-qa.json (prompt/choices/correctIndex schema).
-// Falls back to questions/bank.json (A/B/C/D schema) if cache unavailable.
+// Reads the OpenTriviaQA multiple-choice cache and the audited Wikidata
+// accepted-answer cache. Falls back to questions/bank.json if both are absent.
+
+function normalizeCachedQuestion(q) {
+  const acceptedAnswers = Array.isArray(q.acceptedAnswers)
+    ? q.acceptedAnswers.slice()
+    : [];
+  if (acceptedAnswers.length > 0) {
+    return {
+      ...q,
+      text: q.prompt,
+      acceptedAnswers,
+      correctAnswer: acceptedAnswers[0],
+      explanation: q.explanation || '',
+      difficulty: q.difficulty === 'hard' ? 3 : q.difficulty === 'medium' ? 2 : 1,
+    };
+  }
+
+  const KEYS = ['A', 'B', 'C', 'D'];
+  const choices = [...q.choices];
+  const correct = choices[q.correctIndex];
+  for (let i = choices.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [choices[i], choices[j]] = [choices[j], choices[i]];
+  }
+  const newCorrectIdx = choices.indexOf(correct);
+  const options = {};
+  KEYS.forEach((key, index) => { options[key] = choices[index]; });
+  return {
+    ...q,
+    text: q.prompt,
+    options,
+    answer: KEYS[newCorrectIdx],
+    correctAnswer: correct,
+    explanation: q.explanation || '',
+    difficulty: q.difficulty === 'hard' ? 3 : q.difficulty === 'medium' ? 2 : 1,
+  };
+}
 
 function loadQuestionsFromCache() {
-  const cachePath = path.join(__dirname, 'importer', 'cache', 'open-trivia-qa.json');
-  if (!fs.existsSync(cachePath)) return null;
-  const data  = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
-  const items = data.questions || [];
-  const KEYS  = ['A', 'B', 'C', 'D'];
-  return items.map(q => {
-    // Rotate choices so correctIndex lands on a random position (runtime shuffle)
-    const choices = [...q.choices];
-    const correct = choices[q.correctIndex];
-    // Fisher-Yates with Math.random — not crypto but fine for gameplay
-    for (let i = choices.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [choices[i], choices[j]] = [choices[j], choices[i]];
-    }
-    const newCorrectIdx = choices.indexOf(correct);
-    const options = {};
-    KEYS.forEach((k, i) => { options[k] = choices[i]; });
-    return {
-      id:          q.id,
-      category:    q.category,
-      difficulty:  q.difficulty === 'hard' ? 3 : q.difficulty === 'medium' ? 2 : 1,
-      text:        q.prompt,               // cache field 'prompt' → gameplay field 'text'
-      options,
-      answer:      KEYS[newCorrectIdx],    // A/B/C/D
-      correctAnswer: correct,
-      explanation: '',
-      // Attribution/license metadata preserved (not shown mid-game)
-      _source:     q.source,
-      _license:    q.license,
-      _sourceUrl:  q.sourceUrl,
-    };
-  });
+  const cacheDirectory = path.join(__dirname, 'importer', 'cache');
+  const cachePaths = [
+    path.join(cacheDirectory, 'open-trivia-qa.json'),
+    path.join(cacheDirectory, 'wikidata-world-history.json'),
+  ];
+  const items = [];
+  for (const cachePath of cachePaths) {
+    if (!fs.existsSync(cachePath)) continue;
+    const data = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+    items.push(...(data.questions || []));
+  }
+  return items.length > 0 ? items.map(normalizeCachedQuestion) : null;
 }
 
 function loadQuestionsFromFallback() {
@@ -426,15 +443,6 @@ function validateAnswer(data) {
   const answer = data.answer.trim();
   if (!answer) return null;
   return { answer, roundId: data.roundId };
-}
-function normalizeAnswer(answer) {
-  return String(answer || '')
-    .normalize('NFKC')
-    .toLocaleLowerCase('en-US')
-    .replace(/[‘’]/g, "'")
-    .replace(/[–—]/g, '-')
-    .trim()
-    .replace(/\s+/g, ' ');
 }
 function calculateTimeBonus(elapsedMs) {
   const elapsed = Math.min(Math.max(0, Number(elapsedMs) || 0), CFG.QUESTION_MS);
@@ -607,8 +615,7 @@ function revealRound() {
 
   const q   = circus.currentQ;
   const now = Date.now();
-  const correctAnswer = q.correctAnswer || q.options?.[q.answer] || '';
-  const normalizedCorrect = normalizeAnswer(correctAnswer);
+  const correctAnswer = revealAnswer(q);
 
   const totalAnswered  = circus.answers.size;
   const totalEligible  = circus.eligibleProfileIds.size; // all eligible (incl. disconnected)
@@ -616,7 +623,7 @@ function revealRound() {
   let firstCorrectProfileId = null;
   let firstCorrectSeq = Infinity;
   circus.answers.forEach((a, profileId) => {
-    if (normalizeAnswer(a.answer) === normalizedCorrect) {
+    if (answerMatchesQuestion(q, a.answer)) {
       correctCount += 1;
       if (a.acceptedSeq < firstCorrectSeq) {
         firstCorrectSeq = a.acceptedSeq;
@@ -642,7 +649,7 @@ function revealRound() {
       _roundEarned.set(profileId, { points: 0, correct: false });
       return;
     }
-    const correct = normalizeAnswer(a.answer) === normalizedCorrect;
+    const correct = answerMatchesQuestion(q, a.answer);
     player.stats.correct = (player.stats.correct || 0) + (correct ? 1 : 0);
     player.stats.wrong   = (player.stats.wrong   || 0) + (correct ? 0 : 1);
 

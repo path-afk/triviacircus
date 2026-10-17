@@ -15,6 +15,7 @@ const { io } = require('socket.io-client');
 
 const ROOT = path.resolve(__dirname, '..');
 const CACHE = require('../importer/cache/open-trivia-qa.json');
+const WORLD_HISTORY = require('../importer/cache/wikidata-world-history.json');
 const FALLBACK = require('../questions/bank.json');
 const { CFG } = require('../server');
 const SAFE_NAME = /^[A-Z][a-z]+ [A-Z][a-z]+$/;
@@ -196,6 +197,8 @@ function correctAnswer(question) {
   if (cached) {
     return cached.choices[cached.correctIndex];
   }
+  const worldHistory = WORLD_HISTORY.questions.find(item => item.prompt === question.text);
+  if (worldHistory) return worldHistory.acceptedAnswers[0];
   const fallback = FALLBACK.find(item => item.text === question.text);
   assert.ok(fallback, `question not found in published banks: ${question.text}`);
   return fallback.options[fallback.answer];

@@ -116,6 +116,39 @@ test('an injected RNG makes the complete order reproducible', () => {
   assert.notDeepEqual(first, differentSeed);
 });
 
+test('separates repeated source entities when alternatives exist', () => {
+  const input = [
+    { id: 'a1', category: 'A', sourceRecordId: 'Q1', prompt: 'When did Alpha begin?' },
+    { id: 'a2', category: 'A', sourceRecordId: 'Q2', prompt: 'Who founded Delta?' },
+    { id: 'b1', category: 'B', sourceRecordId: 'Q1', prompt: 'Where did Alpha begin?' },
+    { id: 'b2', category: 'B', sourceRecordId: 'Q3', prompt: 'Who founded Echo?' },
+    { id: 'c1', category: 'C', sourceRecordId: 'Q1', prompt: 'How did Alpha begin?' },
+    { id: 'c2', category: 'C', sourceRecordId: 'Q4', prompt: 'Who founded Foxtrot?' },
+  ];
+  const output = categoryBalancedShuffle(input, seededRandom(71));
+  for (let index = 1; index < output.length; index += 1) {
+    assert.notEqual(output[index].sourceRecordId, output[index - 1].sourceRecordId);
+  }
+  assertSameReferences(input, output);
+});
+
+test('separates near-identical prompt families within the bounded topic window', () => {
+  const input = [
+    { id: 'a1', category: 'A', transformation: 'conflict-country', prompt: 'Which country did the Alpha conflict take place in?' },
+    { id: 'a2', category: 'A', prompt: 'Who founded the northern Delta dynasty?' },
+    { id: 'b1', category: 'B', transformation: 'conflict-country', prompt: 'Which country did the Beta conflict take place in?' },
+    { id: 'b2', category: 'B', prompt: 'When did the southern Echo dynasty end?' },
+    { id: 'c1', category: 'C', transformation: 'conflict-country', prompt: 'Which country did the Gamma conflict take place in?' },
+    { id: 'c2', category: 'C', prompt: 'Where was the ancient Foxtrot capital?' },
+  ];
+  const output = categoryBalancedShuffle(input, seededRandom(19));
+  const familyPositions = output.map((question, index) =>
+    question.prompt.includes('conflict take place') ? index : -1).filter(index => index >= 0);
+  assert.ok(familyPositions.every((position, index) =>
+    index === 0 || position - familyPositions[index - 1] > 1));
+  assertSameReferences(input, output);
+});
+
 test('randomizes both category order and order within categories', () => {
   const input = questionsFor({ A: 10, B: 10, C: 10 });
   const first = categoryBalancedShuffle(input, seededRandom(10));

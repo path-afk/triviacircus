@@ -29,7 +29,7 @@ test('production entrypoint starts and serves the licensed cache', { timeout: 10
         reject(new Error(`server exited with code ${code}\n${output}`));
       });
     });
-    assert.match(output, /Questions loaded from cache: 49162/);
+    assert.match(output, /Questions loaded from cache: 50575/);
   } finally {
     child.kill('SIGTERM');
   }
