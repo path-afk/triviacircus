@@ -2,44 +2,79 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const {
   validateWorldHistoryPackage,
   deduplicateWorldHistoryQuestions,
 } = require('../src/wikidata-history');
 
-const HANDOFF = path.resolve(__dirname, '../../../../inbox/tc-trivia/world-history-20261017');
-function read(name) { return JSON.parse(fs.readFileSync(path.join(HANDOFF, name), 'utf8')); }
+const FULL = require('../cache/wikidata-world-history.json');
+const EXPECTED_CATEGORIES = {
+  'Wars & Military History': 1149,
+  'Dynasties & Royal Houses': 231,
+  'Revolutions & Independence': 33,
+};
 
-test('300-question integration package has the licensed typed-answer schema', () => {
-  const value = read('wikidata-world-history-integration-300.json');
-  const audit = validateWorldHistoryPackage(value);
+function integrationSubset() {
+  const take = {
+    'Wars & Military History': 167,
+    'Dynasties & Royal Houses': 100,
+    'Revolutions & Independence': 33,
+  };
+  return {
+    questions: FULL.questions.filter(question => {
+      if (!take[question.category]) return false;
+      take[question.category] -= 1;
+      return true;
+    }),
+  };
+}
+
+test('committed full package has the exact licensed typed-answer schema', () => {
+  const audit = validateWorldHistoryPackage(FULL);
+  assert.equal(audit.count, 1413);
+  assert.deepEqual(audit.categories, EXPECTED_CATEGORIES);
+  for (const question of FULL.questions) {
+    assert.equal(question.source, 'Wikidata');
+    assert.equal(question.license, 'CC0 1.0');
+    assert.equal(question.qualityStatus, 'screened-user-correctable');
+    assert.match(question.sourceUrl, new RegExp('^https://www[.]wikidata[.]org/wiki/Q[0-9]+$'));
+    assert.ok(question.sourceRecordId && question.sourceRevision
+      && question.transformation && question.licenseUrl);
+  }
+});
+
+test('deterministic 300-question subset validates and deduplicates into the full package', () => {
+  const integration = integrationSubset();
+  const audit = validateWorldHistoryPackage(integration);
   assert.equal(audit.count, 300);
   assert.deepEqual(audit.categories, {
     'Wars & Military History': 167,
     'Dynasties & Royal Houses': 100,
     'Revolutions & Independence': 33,
   });
-  for (const question of value.questions) {
-    assert.equal(question.source, 'Wikidata');
-    assert.equal(question.license, 'CC0 1.0');
-    assert.equal(question.qualityStatus, 'screened-user-correctable');
-    assert.match(question.sourceUrl, /^https:\/\/www\.wikidata\.org\/wiki\/Q\d+$/);
-  }
-});
-
-test('full package validates and deduplicates the integration subset to exactly 1,413', () => {
-  const integration = read('wikidata-world-history-integration-300.json');
-  const full = read('wikidata-world-history-full-1413.json');
-  assert.equal(validateWorldHistoryPackage(full).count, 1413);
-  const merged = deduplicateWorldHistoryQuestions(integration.questions, full.questions);
+  const merged = deduplicateWorldHistoryQuestions(integration.questions, FULL.questions);
   assert.equal(merged.length, 1413);
   assert.equal(new Set(merged.map(question => question.id)).size, 1413);
+  assert.equal(new Set(merged.map(question => question.prompt.normalize('NFKC').toLowerCase().trim())).size, 1413);
 });
 
-test('deduplication does not mutate source questions or lose provenance fields', () => {
-  const integration = read('wikidata-world-history-integration-300.json');
+test('validation rejects duplicates and deduplication is non-mutating', () => {
+  const integration = integrationSubset();
+  const duplicateId = {
+    questions: [...integration.questions, {
+      ...integration.questions[0],
+      prompt: integration.questions[0].prompt + ' duplicate id',
+    }],
+  };
+  const duplicatePrompt = {
+    questions: [...integration.questions, {
+      ...integration.questions[0],
+      id: integration.questions[0].id + ':duplicate-prompt',
+    }],
+  };
+  assert.throws(() => validateWorldHistoryPackage(duplicateId), /duplicate id/);
+  assert.throws(() => validateWorldHistoryPackage(duplicatePrompt), /duplicate prompt/);
+
   const snapshot = JSON.stringify(integration);
   const merged = deduplicateWorldHistoryQuestions(integration.questions, integration.questions);
   assert.equal(merged.length, 300);
